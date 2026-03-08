@@ -1,0 +1,39 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+uvicorn = "*"
+sqlalchemy = "*"
+asyncpg = "*"
+alembic = "*"
+alembic-postgresql-enum = "*"
+pydantic-settings = "*"
+pydantic = {extras = ["email"], version = "*"}
+ollama = "*"
+pgvector = "*"
+fastembed = "*"
+httpx = "*"
+selectolax = "*"
+langdetect = "*"
+taskiq = "*"
+taskiq-redis = "*"
+taskiq-fastapi = "*"
+redis = "*"
+trafilatura = "*"
+certifi = "*"
+crawlee = {extras = ["beautifulsoup"], version = "*"}
+flashrank = "*"
+playwright = "*"
+crawl4ai = "*"
+passlib = {extras = ["bcrypt"], version = "*"}
+pyjwt = "*"
+python-multipart = "*"
+sqlalchemy-utils = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.12"

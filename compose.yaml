@@ -59,7 +59,7 @@ services:
         condition: service_healthy
 
   models-init:
-    build: .
+    build: ./api
     container_name: models-init
     volumes:
       - models_data:/models_cache
@@ -68,35 +68,24 @@ services:
 
   ########################################################################################
   ########################################################################################
-  # browser:
-  #   image: ghcr.io/browserless/chromium:latest
-  #   container_name: browser
-  #   restart: always
-  #   ports:
-  #     - "3000:3000"
-
-  ########################################################################################
-  ########################################################################################
-  crawl4ai:
-    image: unclecode/crawl4ai:latest
-    container_name: crawl4ai
+  browser:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: browser
+    restart: always
     ports:
-      - "11235:11235"
-    environment:
-      - OPENAI_API_KEY=no-key-needed 
-    shm_size: '1g'
+      - "3001:3000"
 
   ########################################################################################
   ########################################################################################
   api:
-    build: .
+    build: ./api
     container_name: api
     command: python -m app.main
     env_file: .env
     ports:
       - 8000:8000
     volumes:
-      - .:/code
+      - ./api:/code
       - models_data:/models_cache      
     depends_on:
       db:
@@ -105,13 +94,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      models-init:
-        condition: service_completed_successfully
+      # models-init:
+      #   condition: service_completed_successfully
+
+  ########################################################################################
+  ########################################################################################
+  dashboard:
+    build: ./dashboard
+    container_name: dashboard
+    ports:
+      - "5173:5173"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - VITE_API_URL=http://localhost:8000/api/v1
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules
+    depends_on:
+      api:
+        condition: service_started
 
   ########################################################################################
   ########################################################################################
   worker:
-    build: .
+    build: ./api
     container_name: worker
     command: taskiq worker app.taskiq.main:broker # --reload --reload-dir app --log-level DEBUG
     env_file: .env
@@ -121,47 +127,31 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - WATCHFILES_FORCE_POLLING=1 
     volumes:
-      - .:/code
+      - ./api:/code
       - models_data:/models_cache
     depends_on:
       db:
         condition: service_started
       redis:
         condition: service_started
-      models-init:
-        condition: service_completed_successfully
+      # models-init:
+      #   condition: service_completed_successfully
 
   ########################################################################################
   ########################################################################################
   scheduler:
-    build: .
+    build: ./api
     container_name: scheduler
     command: taskiq scheduler app.taskiq.main:scheduler
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - .:/code
+      - ./api:/code
       - models_data:/models_cache
     depends_on:
       redis:
         condition: service_started
-
-  ########################################################################################
-  ########################################################################################
-  front:
-    build: ./frontend
-    container_name: front
-    command: npm run dev -- --host 0.0.0.0 --port 5173
-    ports:
-      - "3000:5173"
-    volumes:
-      - ./frontend:/code
-      - /code/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:8000/api/v1
-    depends_on:
-      - api
 
   ########################################################################################
   ########################################################################################
@@ -174,6 +164,7 @@ services:
   #   env_file: .env
   #   environment:
   #     - OLLAMA_BASE_URL=http://ollama:11434
+  #     - WEBUI_SECRET_KEY=owsdfajsdoifjasoidjfqowiej
   #   volumes:
   #     - open_webui_data:/app/backend/data
   #   depends_on:
