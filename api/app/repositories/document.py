@@ -29,16 +29,20 @@ class DocumentRepository(BaseRepository[Document]):
         self, 
         workspace_id: uuid.UUID,
         skip: int,
-        limit: int
+        limit: int,
+        document_ids: Optional[List[uuid.UUID]] = None
     ) -> List[Document]:
         stmt = (
             select(self.model)
             .where(self.model.workspace_id == workspace_id)
             .options(selectinload(self.model.chunks))
-            .order_by(self.model.created_at.desc())
-            .offset(skip)
-            .limit(limit)
         )
+
+        if document_ids:
+            stmt = stmt.where(self.model.id.in_(document_ids))
+
+        stmt = stmt.order_by(self.model.created_at.desc()).offset(skip).limit(limit)
+        
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
     
@@ -49,7 +53,8 @@ class DocumentRepository(BaseRepository[Document]):
         workspace_id: uuid.UUID,
         url: str, 
         lang: LanguageEnum, 
-        content_hash: str, 
+        content_hash: str,
+        is_approved: bool = True,
         title: Optional[str] = None, 
         tags: Optional[List[str]] = None, 
         suggestions: Optional[List[str]] = None
@@ -61,6 +66,7 @@ class DocumentRepository(BaseRepository[Document]):
             title=title,
             lang=lang,
             content_hash=content_hash,
+            is_approved=is_approved,
             tags=tags or [],
             suggestions=suggestions or []
         )
