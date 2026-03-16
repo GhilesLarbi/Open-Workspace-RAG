@@ -2,4 +2,5 @@
 .venv
 .vscode
 models_cache
+../models_cache/
 storage

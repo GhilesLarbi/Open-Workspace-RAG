@@ -1,5 +1,4 @@
-import json
-import uuid
+import json, uuid
 from ollama import AsyncClient
 from fastapi.responses import StreamingResponse
 from fastapi import APIRouter, HTTPException

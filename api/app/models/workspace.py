@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING: 
     from app.models.organization import Organization
     from app.models.document import Document
+    from app.models.job import Job
 
 class Workspace(Base):
     __tablename__ = "workspaces"
@@ -38,3 +39,4 @@ class Workspace(Base):
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="workspaces")
     documents: Mapped[List["Document"]] = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")
+    jobs: Mapped[List["Job"]] = relationship("Job", back_populates="workspace", cascade="all, delete-orphan")

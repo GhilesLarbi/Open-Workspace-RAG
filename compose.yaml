@@ -61,19 +61,20 @@ services:
   models-init:
     build: ./api
     container_name: models-init
+    tty: true
     volumes:
-      - models_data:/models_cache
+      - ./models_cache:/models_cache
     entrypoint: ["python", "download_models.py"]
 
 
   ########################################################################################
   ########################################################################################
-  browser:
-    image: ghcr.io/browserless/chromium:latest
-    container_name: browser
-    restart: always
-    ports:
-      - "3001:3000"
+  # browser:
+  #   image: ghcr.io/browserless/chromium:latest
+  #   container_name: browser
+  #   restart: always
+  #   ports:
+  #     - "3001:3000"
 
   ########################################################################################
   ########################################################################################
@@ -86,7 +87,7 @@ services:
       - 8000:8000
     volumes:
       - ./api:/code
-      - models_data:/models_cache      
+      - ./models_cache:/models_cache 
     depends_on:
       db:
         condition: service_started
@@ -94,8 +95,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      # models-init:
-      #   condition: service_completed_successfully
+      models-init:
+        condition: service_completed_successfully
 
   ########################################################################################
   ########################################################################################
@@ -103,10 +104,10 @@ services:
     build: ./dashboard
     container_name: dashboard
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
-      - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://localhost:8000/api/v1
+      - WATCHPACK_POLLING=true 
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
     volumes:
       - ./dashboard:/app
       - /app/node_modules
@@ -128,14 +129,14 @@ services:
       - WATCHFILES_FORCE_POLLING=1 
     volumes:
       - ./api:/code
-      - models_data:/models_cache
+      - ./models_cache:/models_cache
     depends_on:
       db:
         condition: service_started
       redis:
         condition: service_started
-      # models-init:
-      #   condition: service_completed_successfully
+      models-init:
+        condition: service_completed_successfully
 
   ########################################################################################
   ########################################################################################
@@ -148,7 +149,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./api:/code
-      - models_data:/models_cache
+      - ./models_cache:/models_cache
     depends_on:
       redis:
         condition: service_started
@@ -188,6 +189,5 @@ volumes:
   postgres_data:
   redis_data:
   ollama_data:
-  models_data:
-  open_webui_data:
+  # open_webui_data:
   # redis_insight_data:

@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from sqlalchemy import String, ForeignKey, DateTime, Index, UniqueConstraint, Enum, text
+from sqlalchemy import String, ForeignKey, DateTime, Index, UniqueConstraint, Enum, text, Boolean
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -27,8 +27,7 @@ class Document(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    
-    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=False)
+    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True, default=True, server_default=text("true"))
     
     url: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -46,5 +45,8 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=False)
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="documents")
+
+
     chunks: Mapped[List["Chunk"]] = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")

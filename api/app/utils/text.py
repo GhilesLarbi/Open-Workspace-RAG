@@ -2,6 +2,7 @@ import hashlib
 from typing import List
 from langdetect import detect
 from app.models.enums import LanguageEnum
+from crawl4ai.chunking_strategy import SlidingWindowChunking
 
 ################################################################################
 ################################################################################
@@ -21,22 +22,15 @@ def get_content_hash(text: str) -> str:
 
 ################################################################################
 ################################################################################
-def chunk_text(text: str, max_chars: int = 2000) -> List[str]:
-    """
-    Splits text while preserving Markdown newlines and structure.
-    """
-    paragraphs = text.split('\n')
-    chunks =[]
-    current_chunk = ""
+def chunk_text(text: str, window_size: int = 400, overlap: int = 50) -> List[str]:
+    if not text or not text.strip():
+        return []
+
+    step = max(1, window_size - overlap)
+
+    chunker = SlidingWindowChunking(
+        window_size=window_size,
+        step=step
+    )
     
-    for p in paragraphs:
-        if len(current_chunk) + len(p) > max_chars and current_chunk:
-            chunks.append(current_chunk.strip())
-            current_chunk = ""
-        
-        current_chunk += p + "\n"
-        
-    if current_chunk.strip():
-        chunks.append(current_chunk.strip())
-        
-    return chunks
+    return chunker.chunk(text)
