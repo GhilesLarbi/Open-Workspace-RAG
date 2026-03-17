@@ -6,7 +6,7 @@ from sqlalchemy import select, delete
 from app.repositories.base_repository import BaseRepository
 from app.models.chunk import Chunk
 from app.models.document import Document
-from app.models.enums import LanguageEnum
+from app.schemas.enums import LanguageEnum
 
 class ChunkRepository(BaseRepository[Chunk]):
     

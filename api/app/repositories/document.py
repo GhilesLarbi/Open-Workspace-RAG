@@ -1,12 +1,12 @@
-# app/repositories/document_repository.py
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, text, delete, update
+from sqlalchemy import select, text, delete, update, func
 from app.repositories.base_repository import BaseRepository
 from app.models.document import Document
-from app.models.enums import LanguageEnum
+from app.models.job_document import JobDocument
+from app.schemas.enums import LanguageEnum, JobDocumentAction
 
 class DocumentRepository(BaseRepository[Document]):
 
@@ -24,32 +24,69 @@ class DocumentRepository(BaseRepository[Document]):
         )
         return result.scalar_one_or_none()
 
+
     #################################################################################
     #################################################################################
-    async def get_all_with_chunks_by_workspace(
+    async def get_hashes_by_urls(
+        self, 
+        workspace_id: uuid.UUID, 
+        urls: List[str]
+    ) -> Dict[str, str]:
+
+        stmt = select(self.model.url, self.model.content_hash).where(
+            self.model.workspace_id == workspace_id,
+            self.model.url.in_(urls)
+        )
+        result = await self.db.execute(stmt)
+        return {row.url: row.content_hash for row in result}
+
+    #################################################################################
+    #################################################################################
+    async def get_all_by_workspace_paginated(
         self, 
         workspace_id: uuid.UUID,
         skip: int,
         limit: int,
-        document_ids: Optional[List[uuid.UUID]] = None
-    ) -> List[Document]:
-        stmt = (
-            select(self.model)
-            .where(self.model.workspace_id == workspace_id)
-            .options(selectinload(self.model.chunks))
-        )
+        document_ids: Optional[List[uuid.UUID]] = None,
+        job_ids: Optional[List[uuid.UUID]] = None,
+        is_approved: Optional[bool] = None,
+        lang: Optional[LanguageEnum] = None,
+        actions: Optional[List[JobDocumentAction]] = None
+    ) -> tuple[List[Document], int]:
+
+        stmt = select(self.model).where(self.model.workspace_id == workspace_id)
 
         if document_ids:
             stmt = stmt.where(self.model.id.in_(document_ids))
+        
+        if is_approved is not None:
+            stmt = stmt.where(self.model.is_approved == is_approved)
+            
+        if lang:
+            stmt = stmt.where(self.model.lang == lang)
 
+        if job_ids or actions:
+            stmt = stmt.join(JobDocument, JobDocument.document_id == self.model.id)
+            if job_ids:
+                stmt = stmt.where(JobDocument.job_id.in_(job_ids))
+            if actions:
+                stmt = stmt.where(JobDocument.action.in_(actions))                
+            stmt = stmt.distinct()
 
-        stmt = stmt.order_by(
-            self.model.created_at.desc(), 
-            self.model.id.desc()
-        ).offset(skip).limit(limit)
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = await self.db.scalar(count_stmt) or 0
+
+        stmt = (
+            stmt.options(selectinload(self.model.chunks))
+            .order_by(self.model.created_at.desc(), self.model.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        items = result.scalars().all()
+        
+        return list(items), total
     
     #################################################################################
     #################################################################################
@@ -59,13 +96,15 @@ class DocumentRepository(BaseRepository[Document]):
         url: str, 
         lang: LanguageEnum, 
         content_hash: str,
+        job_id: Optional[uuid.UUID] = None,
+        action: JobDocumentAction = JobDocumentAction.CREATED,
         is_approved: bool = True,
         title: Optional[str] = None, 
         tags: Optional[List[str]] = None, 
         suggestions: Optional[List[str]] = None
     ) -> Document:
 
-        new_doc = self.model(
+        db_document = self.model(
             workspace_id=workspace_id,
             url=url,
             title=title,
@@ -75,9 +114,62 @@ class DocumentRepository(BaseRepository[Document]):
             tags=tags or[],
             suggestions=suggestions or[]
         )
-        self.db.add(new_doc)
-        return new_doc
+
+        if job_id:
+            db_jobdocument = JobDocument(job_id=job_id, action=action)
+            db_document.document_jobs.append(db_jobdocument)
+
+
+        self.db.add(db_document)
+        return db_document
+
+
+    #################################################################################
+    #################################################################################
+    async def upsert_for_job(
+        self,
+        workspace_id: uuid.UUID,
+        url: str,
+        title: str,
+        lang: LanguageEnum,
+        content_hash: str,
+        job_id: uuid.UUID,
+    ) -> Document:
+
+        db_document = await self.get_by_url_and_workspace(url, workspace_id)
+        
+        if db_document:
+            db_document.content_hash = content_hash
+            db_document.title = title
+            db_document.lang = lang
+            db_document.updated_at = func.now()
+            action = JobDocumentAction.UPDATED
+        else:
+            db_document = self.model(
+                workspace_id=workspace_id,
+                url=url,
+                title=title,
+                lang=lang,
+                content_hash=content_hash,
+                tags=[],
+                suggestions=[],
+                is_approved=False
+            )
+            self.db.add(db_document)
+            action = JobDocumentAction.CREATED
+
+
+        await self.db.flush() 
+        db_jobdocument = JobDocument(
+            job_id=job_id, 
+            document_id=db_document.id,
+            action=action
+        )
+        await self.db.merge(db_jobdocument)
+        
+        return db_document        
     
+
     #################################################################################
     #################################################################################
     async def bulk_remove_tag_hierarchy(self, workspace_id: uuid.UUID, path: str):

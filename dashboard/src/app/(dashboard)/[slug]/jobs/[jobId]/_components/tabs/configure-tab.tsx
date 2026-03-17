@@ -17,7 +17,7 @@ export function ConfigureTab({ job, onUpdate, isUpdating }: ConfigureTabProps) {
 
   return (
     <JobConfigForm
-      initialData={job.payload}
+      initialData={job.config}
       onSubmit={handleSubmit}
       isSubmitting={isUpdating}
       submitLabel="Save Changes"

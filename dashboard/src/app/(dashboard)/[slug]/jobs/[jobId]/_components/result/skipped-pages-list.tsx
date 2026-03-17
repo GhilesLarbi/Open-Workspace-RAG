@@ -1,14 +1,13 @@
-// src/app/(dashboard)/[slug]/jobs/[jobId]/_components/result/ignored-pages-list.tsx
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import { IgnoredPage } from "../../_types";
+import { JobPageResult } from "../../../_types";
 
 interface IgnoredPagesListProps {
-  pages: IgnoredPage[];
+  pages: JobPageResult[];
 }
 
-function IgnoredPageRow({ page }: { page: IgnoredPage }) {
+function IgnoredPageRow({ page }: { page: JobPageResult }) {
   const path = (() => {
     try { const u = new URL(page.url); return u.hostname + u.pathname; } catch { return page.url; }
   })();

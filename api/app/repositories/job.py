@@ -3,8 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.repositories.base_repository import BaseRepository
 from app.models.job import Job
-from app.models.enums import JobStatus
+from app.schemas.enums import JobStatus
 from typing import List, Optional
+from app.schemas.job import JobConfig
 from sqlalchemy import delete
 
 class JobRepository(BaseRepository[Job]):
@@ -17,13 +18,13 @@ class JobRepository(BaseRepository[Job]):
     def create(
         self, 
         workspace_id: uuid.UUID, 
-        payload: dict, 
+        config: JobConfig, 
         status: JobStatus = JobStatus.PENDING
     ) -> Job:
 
         db_job = Job(
             workspace_id=workspace_id, 
-            payload=payload, 
+            config=config, 
             status=status
         )
         self.db.add(db_job)

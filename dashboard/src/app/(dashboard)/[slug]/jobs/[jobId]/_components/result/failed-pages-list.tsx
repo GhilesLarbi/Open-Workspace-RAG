@@ -4,10 +4,10 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { FailedPage } from "../../_types";
+import { JobPageResult } from "../../../_types";
 
 interface FailedPagesListProps {
-  pages: FailedPage[];
+  pages: JobPageResult[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -23,7 +23,7 @@ function getErrorSummary(error: string): string {
   return lines[0] ?? error;
 }
 
-function FailedPageRow({ page }: { page: FailedPage }) {
+function FailedPageRow({ page }: { page: JobPageResult }) {
   const [expanded, setExpanded] = useState(false);
 
   const path = (() => {
@@ -45,15 +45,12 @@ function FailedPageRow({ page }: { page: FailedPage }) {
           <p className="text-sm font-medium text-foreground truncate font-mono">{path}</p>
           {!expanded && (
             <p className="text-xs text-muted-foreground line-clamp-1">
-              {getErrorSummary(page.error)}
+              {getErrorSummary(page.error || "")}
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 ml-2">
-          <Badge variant="secondary" className="text-xs">
-            {STATUS_LABELS[page.status] ?? page.status}
-          </Badge>
           <a
             href={page.url}
             target="_blank"

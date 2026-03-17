@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from langdetect import detect
 from flashrank import RerankRequest
 
-from app.models.enums import LanguageEnum
+from app.schemas.enums import LanguageEnum
 from app.core.embeddings import get_embedding_model
 from app.core.ranker import get_ranker
 from app.api.dependencies.repositories import WorkspaceRepositoryDep, ChunkRepositoryDep

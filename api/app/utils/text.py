@@ -1,7 +1,7 @@
 import hashlib
 from typing import List
 from langdetect import detect
-from app.models.enums import LanguageEnum
+from app.schemas.enums import LanguageEnum
 from crawl4ai.chunking_strategy import SlidingWindowChunking
 
 ################################################################################

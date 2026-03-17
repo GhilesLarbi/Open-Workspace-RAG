@@ -1,17 +1,19 @@
-// src/app/(dashboard)/[slug]/jobs/[jobId]/page.tsx
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JobDetailHeader } from "./_components/job-detail-header";
+import Link from "next/link";
 import { OverviewTab } from "./_components/tabs/overview-tab";
 import { ConfigureTab } from "./_components/tabs/configure-tab";
-import { ResultsTab } from "./_components/tabs/results-tab";
+import { ErrorsTab } from "./_components/tabs/errors-tab";
 import { useJob } from "./_hooks/use-job";
 import { JobConfig } from "../_types";
-import { JobResult } from "./_types";
+import { ChevronLeft, Play, Trash2, Loader2, BookOpen } from "lucide-react";
+
+
 
 export default function JobDetailPage() {
   const { slug, jobId } = useParams<{ slug: string; jobId: string }>();
@@ -42,37 +44,80 @@ export default function JobDetailPage() {
     );
   }
 
-  const result = job.result as JobResult | null;
-  const showExport = activeTab === "results" && !!result;
+  const isActive = job.status === "PENDING" || job.status === "STARTED";
+
+  const handleViewDocuments = () => {
+    router.push(`/${slug}/documents?job_ids=${job.id}`);
+  };
+
 
   return (
-    <div className="flex flex-col gap-6 w-full pb-12">
-      <JobDetailHeader
-        job={job}
-        onRun={handleRun}
-        onDelete={handleDelete}
-        isRunning={isRunning}
-        isDeleting={isDeleting}
-        result={showExport ? result : null}
-      />
+    <div className="flex flex-col gap-2 w-full">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="w-fit -ml-2 text-muted-foreground hover:text-foreground"
+      >
+        <Link href={`/${slug}/jobs`}>
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Back to Jobs
+        </Link>
+      </Button>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6">
-          {(["overview", "configure", "results"] as const).map((tab) => (
-            <TabsTrigger key={tab} value={tab} className="capitalize cursor-pointer">
-              {tab}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        
+        <div className="flex items-center justify-between mb-6">
+          <TabsList className="mb-0">
+            {(["overview", "configure", "errors"] as const).map((tab) => (
+              <TabsTrigger key={tab} value={tab} className="capitalize cursor-pointer">
+                {tab}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <TabsContent value="overview" className="mt-0">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 cursor-pointer border-primary/20 hover:border-primary/50 hover:bg-primary/5 text-primary"
+              onClick={handleViewDocuments}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              View Documents
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRun}
+              disabled={isRunning || isActive}
+              className="gap-1.5 cursor-pointer"
+            >
+              {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              Run
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="gap-1.5 cursor-pointer text-muted-foreground hover:text-destructive"
+            >
+              {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+        </div>
+
+        <TabsContent value="overview" className="mt-0 w-full">
           <OverviewTab job={job} />
         </TabsContent>
-        <TabsContent value="configure" className="mt-0">
+        <TabsContent value="configure" className="mt-0 w-full">
           <ConfigureTab job={job} onUpdate={handleUpdate} isUpdating={isUpdating} />
         </TabsContent>
-        <TabsContent value="results" className="mt-0">
-          <ResultsTab job={job} />
+        <TabsContent value="errors" className="mt-0 w-full">
+          <ErrorsTab job={job} />
         </TabsContent>
       </Tabs>
     </div>

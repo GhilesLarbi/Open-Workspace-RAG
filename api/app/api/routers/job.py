@@ -6,7 +6,7 @@ from app.api.dependencies.repositories import WorkspaceRepositoryDep, JobReposit
 from app.api.dependencies.auth import CurrentOrgDep, CurrentWorkspaceDep
 from app.schemas.job import JobConfig, PaginatedJobResponse, JobResponse
 from app.background_tasks.sync import sync_site_task
-from app.models.enums import JobStatus
+from app.schemas.enums import JobStatus
 from typing import List, Optional
 from crawl4ai.models import CrawlResultContainer, CrawlResult, MarkdownGenerationResult
 
@@ -82,7 +82,7 @@ async def create_and_sync_workspace(
 
     db_job = job_repo.create(
         workspace_id=db_workspace.id,
-        payload=config.model_dump()
+        config=config
     )
     await job_repo.db.commit()
 
@@ -92,12 +92,7 @@ async def create_and_sync_workspace(
     db_job.status = JobStatus.PENDING
     
     await job_repo.db.commit()
-
-    return {
-        "job_id": db_job.id,
-        "task_id": db_job.task_id,
-        "status": db_job.status
-    }
+    return db_job
 
 
 
@@ -120,7 +115,7 @@ async def update_and_resync_job(
     if db_job.status == JobStatus.STARTED:
         raise HTTPException(400, "Cannot update a job while it is actively running")
 
-    db_job.payload = config.model_dump()
+    db_job.config = config
     await job_repo.db.commit()
 
     return db_job

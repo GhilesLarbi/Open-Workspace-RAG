@@ -6,17 +6,20 @@ from typing import List
 from sqlalchemy import String, ForeignKey, DateTime, Index, UniqueConstraint, Enum, text, Boolean
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
 from sqlalchemy.sql import func
 from sqlalchemy_utils import LtreeType
 
 from app.models.base import Base
-from app.models.enums import LanguageEnum
+from app.schemas.enums import LanguageEnum
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING : 
     from app.models.chunk import Chunk
     from app.models.workspace import Workspace
+    from app.models.job_document import JobDocument
+    from app.models.job import Job
 
 class Document(Base):
     __tablename__ = "documents"
@@ -50,3 +53,15 @@ class Document(Base):
 
 
     chunks: Mapped[List["Chunk"]] = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
+
+
+    document_jobs: Mapped[list["JobDocument"]] = relationship(
+        "JobDocument", 
+        back_populates="document", 
+        cascade="all, delete-orphan"
+    )
+
+    jobs: AssociationProxy[list["Job"]] = association_proxy(
+        "document_jobs", 
+        "job"
+    )

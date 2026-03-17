@@ -1,11 +1,10 @@
 import uuid, asyncio
-from datetime import datetime
 from itertools import islice
-from typing import Dict, Any, List
+from typing import Dict, List, Tuple, Union
 from taskiq import TaskiqDepends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.job import JobConfig
-from app.models.enums import JobStatus, LanguageEnum
+from app.schemas.job_params import JobConfig, JobResult, JobPageResult, JobSummary
+from app.schemas.enums import JobStatus, LanguageEnum
 
 from app.taskiq.broker import broker
 from app.core.database import get_db
@@ -16,9 +15,87 @@ from app.repositories.job import JobRepository
 from app.utils.text import get_language_enum, get_content_hash, chunk_text
 from app.utils.vector import embed_chunks
 from app.utils.scraper import scrape_deep_crawl
+from crawl4ai.models import CrawlResult
+from pydantic import BaseModel
 
+##################################################################################
+##################################################################################
+class PagePayload(BaseModel):
+    url: str
+    content: str
+    title: str
+    lang: LanguageEnum
+    workspace_id: str
+    content_hash: str
+
+
+##################################################################################
+##################################################################################
+def evaluate_page_result(
+    result: CrawlResult, 
+    config: JobConfig,
+    existing_hashes: Dict[str, str],
+    workspace_id: str
+) -> Tuple[str, Union[JobPageResult, PagePayload]]:
+    url = result.url.rstrip('/')
+
+    # 1. Crawler Failures
+    if not result.success:
+        return "FAIL", JobPageResult(
+            url=url, 
+            error=result.error_message or "Unknown crawler error",
+        )
+
+    # 2. Content Extraction
+    content = result.markdown.fit_markdown if result.markdown else None
+    if not content:
+        return "SKIP", JobPageResult(
+            url=url,
+            reason="Page returned no content"
+        )
+
+    meta = result.metadata or {}
+    title = meta.get("title") or meta.get("og:title") or "Untitled"
+    
+    # 3. Quality Gates
+    word_count = len(content.split())
+    if word_count < config.filtering.word_count_threshold:
+        return "SKIP", JobPageResult(
+            url=url,
+            reason=f"Low word count ({word_count})"
+        )
+
+    lang = get_language_enum(content)
+    if config.filtering.languages and lang not in config.filtering.languages:
+        return "SKIP", JobPageResult(
+            url=url,
+            reason=f"Language '{lang}' not in allowed list"
+        )
+
+    # 4. Check against pre-fetched DB hashes
+    content_hash = get_content_hash(content)
+    db_hash = existing_hashes.get(url)
+    
+    if db_hash and db_hash == content_hash:
+        return "SKIP", JobPageResult(
+            url=url,
+            title=title,
+            reason="Content unchanged"
+        )
+
+    # 5. Success
+    return "PROCESS", PagePayload(
+        url=url,
+        title=title,
+        content=content,
+        content_hash=content_hash,
+        lang=lang,
+        workspace_id=workspace_id
+    )
+
+##################################################################################
+##################################################################################
 BATCH_SIZE = 10
-
 
 def _batched(iterable, n):
     it = iter(iterable)
@@ -30,7 +107,7 @@ def _batched(iterable, n):
 # PagePayload shape expected in each batch item:
 # {
 #   "url": str,
-#   "fit_markdown": str,
+#   "content": str,
 #   "title": str,
 #   "lang": LanguageEnum,
 #   "workspace_id": str,
@@ -38,74 +115,45 @@ def _batched(iterable, n):
 ################################################################################
 @broker.task
 async def process_and_store_page_task(
-    pages: List[Dict[str, Any]],
+    pages: List[PagePayload],
+    job_id: uuid.UUID,
     db: AsyncSession = TaskiqDepends(get_db)
-) -> List[Dict[str, Any]]:
+) -> None :
     doc_repo = DocumentRepository(db)
     chunk_repo = ChunkRepository(db)
 
-    results = []
+    for page in pages:        
+        db_document = await doc_repo.upsert_for_job(
+            workspace_id=uuid.UUID(page.workspace_id),
+            url=page.url,
+            title=page.title,
+            lang=page.lang,
+            content_hash=get_content_hash(page.content),
+            job_id=job_id
+        )
+        
+        await db.flush()
 
-    for page in pages:
-        url          = page["url"]
-        fit_markdown = page["fit_markdown"]
-        title        = page["title"]
-        lang         = page["lang"]
-        ws_uuid      = uuid.UUID(page["workspace_id"])
-
-        content_hash  = get_content_hash(fit_markdown)
-        existing_doc  = await doc_repo.get_by_url_and_workspace(url, ws_uuid)
-
-        if existing_doc:
-            await chunk_repo.delete_by_document_id(existing_doc.id)
-            existing_doc.content_hash = content_hash
-            existing_doc.updated_at   = datetime.now()
-            existing_doc.title        = title
-            doc_id = existing_doc.id
-        else:
-            new_doc = doc_repo.create(
-                workspace_id=ws_uuid,
-                url=url,
-                title=title or "Untitled",
-                lang=lang,
-                content_hash=content_hash,
-                is_approved=False,
-                tags=[],
-                suggestions=[]
-            )
-            await db.flush()
-            doc_id = new_doc.id
-
-        chunks_text = chunk_text(text=fit_markdown, window_size=400, overlap=50)
-
+        await chunk_repo.delete_by_document_id(db_document.id)
+        
+        chunks_text = chunk_text(text=page.content, window_size=400, overlap=50)
         if chunks_text:
-            vectors     = embed_chunks(chunks_text)
+            vectors = embed_chunks(chunks_text)
             chunks_data = [
                 {
-                    "document_id": doc_id,
+                    "document_id": db_document.id,
                     "chunk_index": i,
-                    "content":     txt,
-                    "embedding":   vec,
+                    "content": txt,
+                    "embedding": vec,
                 }
                 for i, (txt, vec) in enumerate(zip(chunks_text, vectors))
             ]
             chunk_repo.create_many(chunks_data)
 
-        # Flush after each page so subsequent pages in the same batch
-        # can see the newly created doc (e.g. avoid duplicate inserts).
-        await db.flush()
-
-        results.append({
-            "doc_id": str(doc_id),
-            "url":    url,
-            "title":  title,
-            "lang":   lang,
-        })
-
     await db.commit()
-    return results
 
 
+################################################################################
 ################################################################################
 @broker.task
 async def sync_site_task(
@@ -114,126 +162,58 @@ async def sync_site_task(
 ) -> dict:
     job_repo = JobRepository(db)
     doc_repo = DocumentRepository(db)
+    job_uuid = uuid.UUID(job_id)
 
-    db_job        = await job_repo.get_by_id(uuid.UUID(job_id))
+    db_job = await job_repo.get_by_id(job_uuid)
     db_job.status = JobStatus.STARTED
     await db.commit()
 
-    config  = JobConfig(**db_job.payload)
-    results = await scrape_deep_crawl(config=config)
+    raw_results = await scrape_deep_crawl(config=db_job.config)
 
-    valid_pages    = []
-    failed_pages   = []
-    ignored_pages  = []
-    queued_urls    = set()
-
-    for result in results:
-        # ── Crawler-level failures ──────────────────────────────────────────
-        if not result.success:
-            failed_pages.append({
-                "url":    result.url,
-                "error":  result.error_message or "Unknown crawler error",
-                "status": "crawler_error",
-            })
-            continue
-
-        if not result.markdown or not result.markdown.fit_markdown:
-            ignored_pages.append({
-                "url":    result.url,
-                "title":  meta.get("title") or meta.get("og:title") or "Untitled",
-                "reason":  "Page returned no content",
-            })
-            continue
-
-        # ── Filtering ───────────────────────────────────────────────────────
-        clean_text = result.markdown.fit_markdown
-        meta       = result.metadata or {}
-        title      = meta.get("title") or meta.get("og:title") or "Untitled"
-
-        word_count = len(clean_text.split())
-        if word_count < config.filtering.word_count_threshold:
-            ignored_pages.append({
-                "url":    result.url,
-                "title":  title,
-                "reason":  f"Word count {word_count} is below threshold {config.filtering.word_count_threshold}",
-            })
-            continue
-
-        detected_lang = get_language_enum(clean_text)
-        if config.filtering.languages and detected_lang not in config.filtering.languages:
-            ignored_pages.append({
-                "url":    result.url,
-                "title":  title,
-                "reason": f"Language '{detected_lang}' not in allowed list",
-            })
-            continue
-
-        # ── Duplicate URL within this crawl ────────────────────────────────
-        normalized_url = result.url.rstrip('/')
-        if normalized_url in queued_urls:
-            ignored_pages.append({
-                "url":    result.url,
-                "title":  title,
-                "reason": "Duplicate URL encountered during crawl",
-            })
-            continue
-
-        # ── Duplicate content already in DB ────────────────────────────────
-        content_hash = get_content_hash(clean_text)
-        existing_doc = await doc_repo.get_by_url_and_workspace(
-            url=normalized_url,
-            workspace_id=db_job.workspace_id,
-        )
-
-        if existing_doc and existing_doc.content_hash == content_hash:
-            ignored_pages.append({
-                "url":    result.url,
-                "title":  title,
-                "reason": "Content unchanged since last crawl",
-            })
-            continue
-
-        # ── Collect for batching ────────────────────────────────────────────
-        queued_urls.add(normalized_url)
-        valid_pages.append({
-            "url":          result.url,
-            "fit_markdown": clean_text,
-            "title":        title,
-            "lang":         detected_lang,
-            "workspace_id": str(db_job.workspace_id),
-        })
-
-    # ── Dispatch in batches of BATCH_SIZE ──────────────────────────────────
-    handles = [
-        await process_and_store_page_task.kiq(pages=batch)
-        for batch in _batched(valid_pages, BATCH_SIZE)
-    ]
-
-    pages_out = []
-    if handles:
-        task_results = await asyncio.gather(*[h.wait_result() for h in handles])
-        for r in task_results:
-            pages_out.extend(r.return_value)
-
-    total_attempted = len(results)
-
-    db_job.status = (
-        JobStatus.FAILURE
-        if total_attempted > 0 and len(pages_out) == 0
-        else JobStatus.SUCCESS
+    unique_results_map = {r.url.rstrip('/'): r for r in raw_results}
+    
+    existing_hashes = await doc_repo.get_hashes_by_urls(
+        workspace_id=db_job.workspace_id,
+        urls=list(unique_results_map.keys())
     )
 
-    db_job.result = {
-        "pages":        pages_out,
-        "failed_pages": failed_pages,
-        "ignored_pages": ignored_pages,
-        "summary": {
-            "total":     total_attempted,
-            "succeeded": len(pages_out),
-            "failed":    len(failed_pages),
-            "ignored":   len(ignored_pages),
-        },
-    }
+    failed_pages  = []
+    skipped_pages = []
+    valid_pages   = []
+
+    for result in unique_results_map.values():
+        state, info = evaluate_page_result(
+            result=result, 
+            config=db_job.config,
+            existing_hashes=existing_hashes,
+            workspace_id=str(db_job.workspace_id)
+        )
+        
+        if state == "FAIL":
+            failed_pages.append(info)
+        elif state == "SKIP":
+            skipped_pages.append(info)
+        else:
+            valid_pages.append(info)
+
+    handles = [
+        await process_and_store_page_task.kiq(pages=batch, job_id=job_uuid)
+        for batch in _batched(valid_pages, BATCH_SIZE)
+    ]
+    await asyncio.gather(*[h.wait_result() for h in handles])
+
+
+    db_job.status = JobStatus.SUCCESS if (not raw_results or valid_pages) else JobStatus.FAILURE
+    db_job.result = JobResult(
+        failed=failed_pages,
+        skipped=skipped_pages,
+        summary=JobSummary(
+            total=len(raw_results),
+            succeeded=len(valid_pages),
+            failed=len(failed_pages),
+            skipped=len(skipped_pages)
+        )
+    )
 
     await db.commit()
     return db_job.result

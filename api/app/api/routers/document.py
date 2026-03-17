@@ -1,32 +1,46 @@
-# app/api/routes/document.py
 from typing import List, Optional
 from fastapi import APIRouter, Query
 from app.api.dependencies.repositories import DocumentRepositoryDep
 from app.api.dependencies.auth import CurrentOrgDep, CurrentWorkspaceDep
-from app.schemas.document import DocumentResponse
+from app.schemas.document import PaginatedDocumentResponse
+from app.schemas.enums import LanguageEnum, JobDocumentAction
+
 import uuid
 
 router = APIRouter()
 
 #############################################################################
 #############################################################################
-@router.get("/{slug}", response_model=List[DocumentResponse])
+@router.get("/{slug}", response_model=PaginatedDocumentResponse)
 async def get_documents(
     db_org: CurrentOrgDep,
     db_workspace: CurrentWorkspaceDep,
     document_repo: DocumentRepositoryDep,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    document_ids: Optional[List[uuid.UUID]] = Query(None)
+    document_ids: Optional[List[uuid.UUID]] = Query(None),
+    job_ids: Optional[List[uuid.UUID]] = Query(None),
+    is_approved: Optional[bool] = Query(None),
+    lang: Optional[LanguageEnum] = Query(None),
+    actions: Optional[List[JobDocumentAction]] = Query(None)
 ):
-    db_documents = await document_repo.get_all_with_chunks_by_workspace(
+    db_documents, total = await document_repo.get_all_by_workspace_paginated(
         workspace_id=db_workspace.id,
         skip=skip,
         limit=limit,
-        document_ids=document_ids
+        document_ids=document_ids,
+        job_ids=job_ids,
+        is_approved=is_approved,
+        lang=lang,
+        actions=actions
     )
     
-    return db_documents
+    return PaginatedDocumentResponse(
+        items=db_documents, 
+        total=total, 
+        skip=skip, 
+        limit=limit
+    )
 
 #############################################################################
 #############################################################################

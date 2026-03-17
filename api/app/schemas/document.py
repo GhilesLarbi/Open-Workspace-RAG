@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import List, Optional
 from datetime import datetime
 
-from app.models.enums import LanguageEnum
+from app.schemas.enums import LanguageEnum
 from app.schemas.chunk import ChunkResponse
 
 #############################################################################
@@ -30,3 +30,12 @@ class DocumentResponse(BaseModel):
         if v is None:
             return[]
         return [str(tag) for tag in v]
+    
+
+#############################################################################
+#############################################################################
+class PaginatedDocumentResponse(BaseModel):
+    items: List[DocumentResponse]
+    total: int
+    skip: int
+    limit: int

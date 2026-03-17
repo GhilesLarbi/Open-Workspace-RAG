@@ -1,12 +1,9 @@
-// src/app/(dashboard)/[slug]/jobs/_hooks/use-jobs.ts
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
   Job,
   JobConfig,
-  JobCreateResponse,
   JobDeleteResponse,
   JobStatus,
   PaginatedResponse,
@@ -46,7 +43,7 @@ export function useJobs(params: UseJobsParams = {}) {
 
   const createMutation = useMutation({
     mutationFn: (config: JobConfig) =>
-      apiFetch<JobCreateResponse>(`/jobs/${slug}`, {
+      apiFetch<Job>(`/jobs/${slug}`, {
         method: "POST",
         body: JSON.stringify(config),
       }),

@@ -1,4 +1,3 @@
-// src/app/(dashboard)/[slug]/jobs/_components/form/job-config-form.tsx
 "use client";
 
 import { useState } from "react";
@@ -27,7 +26,7 @@ interface JobConfigFormProps {
   submitLabel?: string;
 }
 
-const TABS =[
+const TABS = [
   {
     value: "core",
     label: "Core",
@@ -74,25 +73,22 @@ export function JobConfigForm({
         min_word_threshold: 5,
         threshold_type: "fixed",
         threshold: 0.2,
-        ignore_links: true,
+        ignore_links: false,
         ignore_images: true,
-        skip_internal_links: true,
+        skip_internal_links: false,
       },
     },
   });
 
   const { formState: { errors } } = form;
 
-  // Check if a specific tab has validation errors
   const hasError = (fields: readonly string[]) => {
     return fields.some((f) => {
-      // For nested fields like crawling.filters, we just check the top-level key
       const topLevelKey = f.split(".")[0];
       return !!errors[topLevelKey as keyof typeof errors];
     });
   };
 
-  // If validation fails on submit, automatically jump to the first tab with an error
   const onError = (formErrors: any) => {
     const errorFields = Object.keys(formErrors);
     for (const tab of TABS) {
@@ -103,41 +99,48 @@ export function JobConfigForm({
     }
   };
 
-  // Explicit submit handler
   const handleSubmit = form.handleSubmit(onSubmit, onError);
 
   return (
     <FormProvider {...form}>
-      {/* 
-        No onSubmit on the <form> element. 
-        We call handleSubmit explicitly on the button click. 
-      */}
       <form
         onSubmit={(e) => e.preventDefault()}
         className="space-y-6"
       >
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-6 flex flex-wrap h-auto">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const tabHasError = hasError(tab.fields);
 
-              return (
-                <TabsTrigger 
-                  key={tab.value} 
-                  value={tab.value} 
-                  className={cn(
-                    "gap-2 cursor-pointer py-2",
-                    tabHasError && "text-destructive data-[state=active]:text-destructive"
-                  )}
-                >
-                  {/* <Icon className="h-4 w-4" /> */}
-                  {tab.label}
-                  {tabHasError && <AlertCircle className="h-3.5 w-3.5" />}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="flex items-start justify-between">
+
+            <TabsList className="mb-4 flex flex-wrap h-auto">
+              {TABS.map((tab) => {
+                const tabHasError = hasError(tab.fields);
+
+                return (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className={cn(
+                      "gap-2 cursor-pointer py-2",
+                      tabHasError && "text-destructive data-[state=active]:text-destructive"
+                    )}
+                  >
+                    {tab.label}
+                    {tabHasError && <AlertCircle className="h-3.5 w-3.5" />}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+
+            <Button
+              type="button"
+              className="cursor-pointer shadow-sm"
+              disabled={isSubmitting}
+              onClick={handleSubmit}
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitLabel}
+            </Button>
+          </div>
 
           <div className="min-h-[320px]">
             <TabsContent value="core" className="mt-0 space-y-4">
@@ -152,11 +155,10 @@ export function JobConfigForm({
                       type="url"
                       placeholder="https://example.com"
                       autoFocus
-                      // Prevent Enter from doing anything unexpected
                       onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                     />
                     <FieldDescription>
-                      The primary entry point for this job. Must be publicly accessible.
+                      The primary entry point.
                     </FieldDescription>
                     <FieldError errors={[fieldState.error]} />
                   </Field>
@@ -177,19 +179,6 @@ export function JobConfigForm({
             </TabsContent>
           </div>
         </Tabs>
-
-        {/* ── Footer ── */}
-        <div className="flex items-center justify-end pt-6 border-t border-border">
-          <Button
-            type="button"
-            className="cursor-pointer shadow-sm"
-            disabled={isSubmitting}
-            onClick={handleSubmit}
-          >
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submitLabel}
-          </Button>
-        </div>
       </form>
     </FormProvider>
   );

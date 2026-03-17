@@ -1,5 +1,3 @@
-// src/app/(dashboard)/[slug]/jobs/_types/index.ts
-
 export enum LanguageEnum {
   AR = "AR",
   FR = "FR",
@@ -72,29 +70,44 @@ export interface JobConfig {
   formating: FormatingConfig;
 }
 
+export interface JobPageResult {
+    url: string
+    title: string | null
+    reason: string | null
+    error: string | null
+}
+
+
+export interface JobSummary {
+    total: number
+    succeeded: number
+    failed: number
+    skipped: number
+
+}
+
+export interface JobResult {
+  failed: JobPageResult[],
+  skipped: JobPageResult[],
+  summary: JobSummary,
+}
+
 export interface Job {
   id: string;
   workspace_id: string;
   task_id: string | null;
   status: JobStatus;
-  payload: JobConfig;
-  result: Record<string, unknown> | null;
+  config: JobConfig;
+  result: JobResult | null;
   created_at: string;
   updated_at: string;
 }
 
-// Matches backend PaginatedResponse[T]
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   skip: number;
   limit: number;
-}
-
-export interface JobCreateResponse {
-  job_id: string;
-  task_id: string | null;
-  status: JobStatus;
 }
 
 export interface JobDeleteResponse {

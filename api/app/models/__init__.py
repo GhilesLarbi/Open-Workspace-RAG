@@ -4,3 +4,4 @@ from app.models.chunk import Chunk
 from app.models.organization import Organization
 from app.models.workspace import Workspace
 from app.models.job import Job
+from app.models.job_document import JobDocument

@@ -428,7 +428,7 @@ export function CrawlingSection() {
 
             {fields.length === 0 ? (
               <div className="flex items-center justify-center rounded-lg border border-dashed border-border py-8 text-sm text-muted-foreground">
-                No filter rules — all discovered pages will be crawled.
+                No filter rules.
               </div>
             ) : (
               <div className="space-y-3">
