@@ -18,6 +18,9 @@ export interface Document {
   suggestions: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface DocumentWithChunks extends Document {
   chunks: Chunk[];
 }
 

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { JobConfigValues } from "../../_types/schemas";
 
 const TOGGLE_OPTIONS = [
@@ -26,12 +28,19 @@ const TOGGLE_OPTIONS = [
   },
 ];
 
+const DEFAULT_EXCLUDED_TAGS = [
+  "nav", "footer", "aside", "header", 
+  "#footer", ".footer", "#header", ".header", 
+  ".copyright", ".cookie-banner", "#cookie-banner",
+  ".sidebar", "#sidebar", ".menu", "#menu"
+];
+
 export function FormattingSection() {
-  const { control } = useFormContext<JobConfigValues>();
+  const { control, watch, setValue } = useFormContext<JobConfigValues>();
+  const excludedTags = watch("formating.excluded_tags") || [];
 
   return (
     <div className="space-y-8">
-      {/* LLM Query */}
       <Controller
         name="formating.user_query"
         control={control}
@@ -55,8 +64,65 @@ export function FormattingSection() {
         )}
       />
 
+      {/* NEW: Excluded Tags (Boilerplate Removal) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <FieldLabel>Boilerplate Exclusion Tags</FieldLabel>
+            <FieldDescription>
+              CSS selectors to aggressively strip from the page (e.g. headers, footers, navbars) before processing.
+            </FieldDescription>
+          </div>
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={() => setValue("formating.excluded_tags", DEFAULT_EXCLUDED_TAGS, { shouldValidate: true })}
+          >
+            Reset to Defaults
+          </Button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <div className="flex flex-wrap gap-2 min-h-8">
+            {excludedTags.map((tag, i) => (
+              <Badge key={i} variant="secondary" className="gap-1.5 pr-1">
+                <span className="font-mono text-xs">{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = [...excludedTags];
+                    updated.splice(i, 1);
+                    setValue("formating.excluded_tags", updated, { shouldValidate: true });
+                  }}
+                  className="hover:text-destructive transition-colors ml-0.5 cursor-pointer"
+                >
+                  ×
+                </button>
+              </Badge>
+            ))}
+          </div>
+          <Input
+            placeholder="e.g. .ad-banner, #newsletter — press Enter to add"
+            className="text-sm font-mono"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const val = (e.target as HTMLInputElement).value.trim();
+                if (val && !excludedTags.includes(val)) {
+                  setValue("formating.excluded_tags", [...excludedTags, val], { shouldValidate: true });
+                  (e.target as HTMLInputElement).value = "";
+                }
+              }
+            }}
+          />
+        </div>
+      </div>
+
       {/* Threshold controls */}
       <div className="grid grid-cols-3 gap-4">
+        {/* ... (Keep your existing Threshold Type, Relevance Threshold, and Min Block Words fields exactly as they are) ... */}
         <Controller
           name="formating.threshold_type"
           control={control}

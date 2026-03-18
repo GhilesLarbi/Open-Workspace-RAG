@@ -15,7 +15,7 @@ export function DocumentsHeader({ total, isFiltered }: DocumentsHeaderProps) {
   const { slug } = useParams<{ slug: string }>();
 
   return (
-    <div className="flex items-center justify-between shrink-0 pb-4 border-b border-border">
+    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -24,9 +24,9 @@ export function DocumentsHeader({ total, isFiltered }: DocumentsHeaderProps) {
             : `${total} document${total !== 1 ? "s" : ""} in this workspace`}
         </p>
       </div>
-      <Button asChild size="sm" className="gap-1.5 cursor-pointer">
+      <Button asChild className="gap-1.5 cursor-pointer shadow-sm">
         <Link href={`/${slug}/documents/add`}>
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-4 w-4" />
           Add Document
         </Link>
       </Button>

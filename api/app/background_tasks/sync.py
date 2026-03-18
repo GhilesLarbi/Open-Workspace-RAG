@@ -118,37 +118,53 @@ async def process_and_store_page_task(
     pages: List[PagePayload],
     job_id: uuid.UUID,
     db: AsyncSession = TaskiqDepends(get_db)
-) -> None :
-    doc_repo = DocumentRepository(db)
-    chunk_repo = ChunkRepository(db)
+) -> None:
+    document_repository = DocumentRepository(db)
+    chunk_repository = ChunkRepository(db)
 
-    for page in pages:        
-        db_document = await doc_repo.upsert_for_job(
-            workspace_id=uuid.UUID(page.workspace_id),
+    if not pages:
+        return
+
+    workspace_id = uuid.UUID(pages[0].workspace_id)
+    processed_document_ids = []
+
+    for page in pages:
+        db_document = await document_repository.upsert_for_job(
+            workspace_id=workspace_id,
             url=page.url,
             title=page.title,
             lang=page.lang,
             content_hash=get_content_hash(page.content),
             job_id=job_id
         )
-        
+        processed_document_ids.append(db_document.id)
+
         await db.flush()
 
-        await chunk_repo.delete_by_document_id(db_document.id)
+        await chunk_repository.delete_by_document_id(db_document.id)
+        text_chunks = chunk_text(text=page.content, window_size=400, overlap=50)
         
-        chunks_text = chunk_text(text=page.content, window_size=400, overlap=50)
-        if chunks_text:
-            vectors = embed_chunks(chunks_text)
-            chunks_data = [
-                {
-                    "document_id": db_document.id,
-                    "chunk_index": i,
-                    "content": txt,
-                    "embedding": vec,
-                }
-                for i, (txt, vec) in enumerate(zip(chunks_text, vectors))
-            ]
-            chunk_repo.create_many(chunks_data)
+        if not text_chunks:
+            continue
+
+        chunk_vectors = embed_chunks(text_chunks)
+
+        chunk_records = [
+            {
+                "document_id": db_document.id,
+                "chunk_index": index,
+                "content": content,
+                "embedding": vector,
+            }
+            for index, (content, vector) in enumerate(zip(text_chunks, chunk_vectors))
+        ]
+        chunk_repository.create_many(chunk_records)
+
+    if processed_document_ids:
+        await db.flush()
+        await document_repository.bulk_label_documents_with_debug(
+            document_ids=processed_document_ids,
+        )
 
     await db.commit()
 

@@ -63,8 +63,13 @@ async def scrape_deep_crawl(config: JobConfig) -> List[CrawlResult]:
             filter_chain=FilterChain(filter_instances)
         )
 
+
+    selector_string = ", ".join(config.formating.excluded_tags) if config.formating.excluded_tags else None
+
     arun_config = CrawlerRunConfig(
         deep_crawl_strategy=strategy,
+        excluded_tags=None,
+        excluded_selector=selector_string,
         markdown_generator=DefaultMarkdownGenerator(
             content_filter=PruningContentFilter(
                 user_query=config.formating.user_query,

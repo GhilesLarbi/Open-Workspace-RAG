@@ -61,6 +61,7 @@ export interface FormatingConfig {
   ignore_links: boolean;
   ignore_images: boolean;
   skip_internal_links: boolean;
+  excluded_tags: string[];
 }
 
 export interface JobConfig {

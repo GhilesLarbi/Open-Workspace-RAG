@@ -19,9 +19,6 @@ class DocumentResponse(BaseModel):
     suggestions: List[str] =[]
     created_at: datetime
     updated_at: datetime
-    
-    chunks: List[ChunkResponse] =[]
-
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("tags", mode="before")
@@ -30,7 +27,12 @@ class DocumentResponse(BaseModel):
         if v is None:
             return[]
         return [str(tag) for tag in v]
-    
+
+
+#############################################################################
+#############################################################################
+class DocumentResponseWithChunks(DocumentResponse):
+    chunks: List[ChunkResponse]
 
 #############################################################################
 #############################################################################

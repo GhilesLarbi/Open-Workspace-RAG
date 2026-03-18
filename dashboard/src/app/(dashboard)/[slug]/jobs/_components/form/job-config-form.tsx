@@ -67,15 +67,21 @@ export function JobConfigForm({
     defaultValues: {
       url: initialData?.url ?? "",
       crawling: initialData?.crawling ?? null,
-      filtering: initialData?.filtering ?? { word_count_threshold: 0, languages: null },
+      filtering: initialData?.filtering ?? { word_count_threshold: 30, languages: null },
       formating: initialData?.formating ?? {
         user_query: null,
-        min_word_threshold: 5,
-        threshold_type: "fixed",
-        threshold: 0.2,
+        min_word_threshold: 20,
+        threshold_type: "dynamic",
+        threshold: 0.6,
         ignore_links: false,
         ignore_images: true,
         skip_internal_links: false,
+        excluded_tags: [
+          "nav", "footer", "aside", "header", 
+          "#footer", ".footer", "#header", ".header", 
+          ".copyright", ".cookie-banner", "#cookie-banner",
+          ".sidebar", "#sidebar", ".menu", "#menu"
+        ],
       },
     },
   });

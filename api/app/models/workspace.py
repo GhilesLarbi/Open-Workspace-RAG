@@ -4,7 +4,7 @@ from typing import List
 
 from sqlalchemy import String, ForeignKey, UniqueConstraint, ARRAY, text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.models.base import Base
 from sqlalchemy_utils import LtreeType
 
@@ -36,6 +36,9 @@ class Workspace(Base):
         nullable=False, 
         server_default=text("'{}'::ltree[]")
     )
+
+    tags_embeddings: Mapped[dict] = mapped_column(JSONB, nullable=True)
+
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="workspaces")
     documents: Mapped[List["Document"]] = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")

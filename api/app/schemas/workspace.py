@@ -25,6 +25,7 @@ class WorkspaceResponse(BaseModel):
     url: str
     slug: str
     tags: List[str] = []
+    tags_embeddings: dict = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
 

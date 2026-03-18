@@ -46,6 +46,16 @@ export const filteringConfigSchema = z.object({
   languages: z.array(z.nativeEnum(LanguageEnum)).nullable().default(null),
 });
 
+
+
+const DEFAULT_EXCLUDED_TAGS = [
+  "nav", "footer", "aside", "header", 
+  "#footer", ".footer", "#header", ".header", 
+  ".copyright", ".cookie-banner", "#cookie-banner",
+  ".sidebar", "#sidebar", ".menu", "#menu"
+];
+
+
 export const formatingConfigSchema = z.object({
   user_query: z.string().nullable().default(null),
   min_word_threshold: z.number().int().default(5),
@@ -54,6 +64,7 @@ export const formatingConfigSchema = z.object({
   ignore_links: z.boolean().default(true),
   ignore_images: z.boolean().default(true),
   skip_internal_links: z.boolean().default(true),
+  excluded_tags: z.array(z.string()).default(DEFAULT_EXCLUDED_TAGS),
 });
 
 // --- Main Job Config ---
@@ -69,6 +80,7 @@ export const jobConfigSchema = z.object({
     ignore_links: true,
     ignore_images: true,
     skip_internal_links: true,
+    excluded_tags: DEFAULT_EXCLUDED_TAGS,
   }),
 });
 

@@ -40,6 +40,23 @@ class DocumentRepository(BaseRepository[Document]):
         result = await self.db.execute(stmt)
         return {row.url: row.content_hash for row in result}
 
+    async def get_by_id_with_chunks(
+        self,
+        workspace_id: uuid.UUID,
+        document_id: uuid.UUID
+    ) -> Optional[Document]:
+
+        stmt = (
+            select(self.model)
+            .where(
+                self.model.workspace_id == workspace_id,
+                self.model.id == document_id
+            )
+            .options(selectinload(self.model.chunks))
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+    
     #################################################################################
     #################################################################################
     async def get_all_by_workspace_paginated(
@@ -50,7 +67,7 @@ class DocumentRepository(BaseRepository[Document]):
         document_ids: Optional[List[uuid.UUID]] = None,
         job_ids: Optional[List[uuid.UUID]] = None,
         is_approved: Optional[bool] = None,
-        lang: Optional[LanguageEnum] = None,
+        langs: Optional[LanguageEnum] = None,
         actions: Optional[List[JobDocumentAction]] = None
     ) -> tuple[List[Document], int]:
 
@@ -62,8 +79,8 @@ class DocumentRepository(BaseRepository[Document]):
         if is_approved is not None:
             stmt = stmt.where(self.model.is_approved == is_approved)
             
-        if lang:
-            stmt = stmt.where(self.model.lang == lang)
+        if langs:
+            stmt = stmt.where(self.model.lang.in_(langs))
 
         if job_ids or actions:
             stmt = stmt.join(JobDocument, JobDocument.document_id == self.model.id)
@@ -172,6 +189,63 @@ class DocumentRepository(BaseRepository[Document]):
 
     #################################################################################
     #################################################################################
+    async def bulk_label_documents_with_debug(
+        self, 
+        document_ids: List[uuid.UUID]
+    ) -> List[dict]:
+        # Final Tuned Math: 0.09 + 0.02 * ln(L)
+        # This provides a ~0.24 threshold for full chunks, catching all relevant themes.
+        query = text("""
+            WITH scoring AS (
+                SELECT 
+                    c.document_id,
+                    tag.key AS tag_path,
+                    (c.embedding <=> tag.val::text::vector) AS distance,
+                    (0.04 + 0.025 * ln(GREATEST(length(c.content), 1))) AS threshold
+                FROM chunks c
+                JOIN documents d ON c.document_id = d.id
+                JOIN workspaces w ON d.workspace_id = w.id
+                CROSS JOIN LATERAL jsonb_each(w.tags_embeddings) AS tag(key, val)
+                WHERE d.id = ANY(:document_ids)
+            ),
+            document_best_matches AS (
+                SELECT 
+                    document_id,
+                    tag_path,
+                    MIN(distance) AS best_distance,
+                    -- We use the max threshold calculated for the doc's chunks
+                    MAX(threshold) AS calculated_threshold
+                FROM scoring
+                GROUP BY document_id, tag_path
+            ),
+            matches AS (
+                SELECT 
+                    document_id, 
+                    array_agg(DISTINCT tag_path::ltree) AS final_tags_list
+                FROM document_best_matches
+                WHERE best_distance < calculated_threshold
+                GROUP BY document_id
+            ),
+            update_step AS (
+                UPDATE documents d
+                SET tags = COALESCE(m.final_tags_list, '{}'::ltree[])
+                FROM matches m
+                WHERE d.id = m.document_id
+            )
+            SELECT 
+                dbm.document_id,
+                dbm.tag_path,
+                ROUND(dbm.best_distance::numeric, 4) AS distance,
+                ROUND(dbm.calculated_threshold::numeric, 4) AS threshold,
+                (dbm.best_distance < dbm.calculated_threshold) AS is_match
+            FROM document_best_matches dbm
+            ORDER BY dbm.document_id, dbm.best_distance ASC;
+        """)
+        
+        result = await self.db.execute(query, {"document_ids": document_ids})
+        return [dict(row._mapping) for row in result.fetchall()]    
+    #################################################################################
+    #################################################################################
     async def bulk_remove_tag_hierarchy(self, workspace_id: uuid.UUID, path: str):
         query = text("""
             UPDATE documents 
@@ -179,10 +253,11 @@ class DocumentRepository(BaseRepository[Document]):
                 SELECT t FROM unnest(tags) AS t 
                 WHERE NOT (t <@ CAST(:path AS ltree))
             )
-            WHERE workspace_id = :ws_id 
-              AND tags && ARRAY[CAST(:path AS ltree)]
+            WHERE workspace_id = :workspace_id 
+              AND tags ~ CAST(:path || '.*' AS lquery)
         """)
-        await self.db.execute(query, {"path": path, "ws_id": workspace_id})
+        
+        await self.db.execute(query, {"path": path, "workspace_id": workspace_id})
 
     #################################################################################
     #################################################################################
@@ -190,7 +265,7 @@ class DocumentRepository(BaseRepository[Document]):
         query = text("""
             UPDATE documents
             SET tags = ARRAY(
-                SELECT 
+                SELECT DISTINCT
                     CASE 
                         WHEN t = CAST(:old AS ltree) THEN CAST(:new AS ltree)
                         WHEN t <@ CAST(:old AS ltree) THEN CAST(:new AS ltree) || subpath(t, nlevel(CAST(:old AS ltree)))
@@ -198,10 +273,11 @@ class DocumentRepository(BaseRepository[Document]):
                     END
                 FROM unnest(tags) AS t
             )
-            WHERE workspace_id = :ws_id 
-              AND tags && ARRAY[CAST(:old AS ltree)]
+            WHERE workspace_id = :workspace_id 
+              AND tags ~ CAST(:old || '.*' AS lquery)
         """)
-        await self.db.execute(query, {"old": old_path, "new": new_path, "ws_id": workspace_id})
+        
+        await self.db.execute(query, {"old": old_path, "new": new_path, "workspace_id": workspace_id})
 
     #################################################################################
     #################################################################################

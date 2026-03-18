@@ -1,15 +1,17 @@
 // src/app/(dashboard)/[slug]/documents/_hooks/use-documents.ts
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Document, PaginatedDocumentResponse, LanguageEnum, JobDocumentAction } from "../_types";
 
 interface UseDocumentsParams {
-  limit?: number;
+  page?: number;
+  pageSize?: number;
+  q?: string;
   documentIds?: string[];
   jobIds?: string[];
   isApproved?: boolean;
-  lang?: LanguageEnum;
+  langs?: LanguageEnum[];
   actions?: JobDocumentAction[];
 }
 
@@ -18,53 +20,47 @@ export function useDocuments(params: UseDocumentsParams = {}) {
   const queryClient = useQueryClient();
   
   const { 
-    limit = 20, 
+    page = 1, 
+    pageSize = 10, 
+    q,
     documentIds, 
     jobIds, 
     isApproved, 
-    lang, 
+    langs, 
     actions 
   } = params;
 
-  const queryKey = ["documents", slug, params];
+  const skip = (page - 1) * pageSize;
 
-  const query = useInfiniteQuery({
+  const queryKey = ["documents", slug, { skip, pageSize, q, documentIds, jobIds, isApproved, langs, actions }];
+
+  const query = useQuery({
     queryKey,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async () => {
       const sp = new URLSearchParams();
-      sp.set("skip", pageParam.toString());
-      sp.set("limit", limit.toString());
+      sp.set("skip", skip.toString());
+      sp.set("limit", pageSize.toString());
 
+      if (q) sp.set("q", q);
       documentIds?.forEach((id) => sp.append("document_ids", id));
       jobIds?.forEach((id) => sp.append("job_ids", id));
+      langs?.forEach((l) => sp.append("langs", l));
       actions?.forEach((action) => sp.append("actions", action));
 
       if (isApproved !== undefined) {
         sp.set("is_approved", String(isApproved));
       }
-      if (lang) {
-        sp.set("lang", lang);
-      }
 
       return apiFetch<PaginatedDocumentResponse>(`/documents/${slug}?${sp.toString()}`);
     },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => {
-      const nextSkip = lastPage.skip + lastPage.limit;
-      return nextSkip < lastPage.total ? nextSkip : undefined;
-    },
     enabled: !!slug,
+    placeholderData: (prev) => prev,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (ids: string[]) =>
-      apiFetch(`/documents/${slug}`, {
-        method: "DELETE",
-        body: JSON.stringify(ids),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents", slug] });
-    },
+      apiFetch(`/documents/${slug}`, { method: "DELETE", body: JSON.stringify(ids) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents", slug] }),
   });
 
   const approveMutation = useMutation({
@@ -73,25 +69,16 @@ export function useDocuments(params: UseDocumentsParams = {}) {
         method: "PATCH",
         body: JSON.stringify(ids),
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents", slug] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents", slug] }),
   });
 
   return {
-    documents: query.data?.pages.flatMap((page) => page.items) ?? [],
-    totalCount: query.data?.pages[0]?.total ?? 0,
-    
+    documents: query.data?.items ?? [],
+    totalCount: query.data?.total ?? 0,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
-    isFetchingNextPage: query.isFetchingNextPage,
-    isError: query.isError,
-    hasNextPage: query.hasNextPage,
-    fetchNextPage: query.fetchNextPage,
-    
     deleteDocuments: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
-    
     approveDocuments: approveMutation.mutateAsync,
     isApproving: approveMutation.isPending,
   };

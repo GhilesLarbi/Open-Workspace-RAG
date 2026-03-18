@@ -1,8 +1,7 @@
-# app/repositories/chunk.py
 import uuid
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, text
 from app.repositories.base_repository import BaseRepository
 from app.models.chunk import Chunk
 from app.models.document import Document
@@ -43,7 +42,7 @@ class ChunkRepository(BaseRepository[Chunk]):
             for data in chunks_data
         ]
         self.db.add_all(models_to_insert)
-
+        
     #################################################################################
     #################################################################################
     async def search_with_window(
