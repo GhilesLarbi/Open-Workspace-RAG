@@ -39,42 +39,29 @@ services:
 
   ########################################################################################
   ########################################################################################
-  model-init:
-    image: ollama/ollama:latest
-    container_name: model-init
-    tty: true
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=ollama:11434
-    entrypoint: /bin/sh
-    command: 
-      - "-c"
-      - |
-        echo "Pulling Qwen2.5 1.5B (approx 1.1GB)..."
-        ollama pull qwen2.5:1.5b
-        echo "Models downloaded successfully."
-    depends_on:
-      ollama:
-        condition: service_healthy
-
-  models-init:
-    build: ./api
-    container_name: models-init
-    tty: true
-    volumes:
-      - ./models_cache:/models_cache
-    entrypoint: ["python", "download_models.py"]
-
-
-  ########################################################################################
-  ########################################################################################
-  # browser:
-  #   image: ghcr.io/browserless/chromium:latest
-  #   container_name: browser
-  #   restart: always
-  #   ports:
-  #     - "3001:3000"
+  # model-init:
+  #   image: ollama/ollama:latest
+  #   container_name: model-init
+  #   tty: true
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   environment:
+  #     - OLLAMA_HOST=ollama:11434
+  #   entrypoint: /bin/sh
+  #   command: 
+  #     - "-c"
+  #     - |
+  #       echo "Pulling LLM..."
+  #       ollama pull qwen2.5:1.5b
+  #       echo "Pulling Embedding..."
+  #       ollama pull bge-m3
+  #       echo "Pulling Reranker..."
+  #       ollama pull bge-reranker-v2-m3
+  #       echo "System Ready."
+        
+  #   depends_on:
+  #     ollama:
+  #       condition: service_healthy
 
   ########################################################################################
   ########################################################################################
@@ -87,7 +74,6 @@ services:
       - 8000:8000
     volumes:
       - ./api:/code
-      - ./models_cache:/models_cache 
     depends_on:
       db:
         condition: service_started
@@ -95,8 +81,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      models-init:
-        condition: service_completed_successfully
 
   ########################################################################################
   ########################################################################################
@@ -129,14 +113,11 @@ services:
       - WATCHFILES_FORCE_POLLING=1 
     volumes:
       - ./api:/code
-      - ./models_cache:/models_cache
     depends_on:
       db:
         condition: service_started
       redis:
         condition: service_started
-      models-init:
-        condition: service_completed_successfully
 
   ########################################################################################
   ########################################################################################
@@ -149,7 +130,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./api:/code
-      - ./models_cache:/models_cache
     depends_on:
       redis:
         condition: service_started

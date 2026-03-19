@@ -9,4 +9,9 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 7
 
 
+    OLLAMA_HOST: str = 'http://ollama:11434'
+    OLLAMA_LLM_MODEL: str = "llama3.2:1b"
+    OLLAMA_EMBEDDING_MODEL: str = "bge-m3"
+
+
 settings = Settings()

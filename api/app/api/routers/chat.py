@@ -4,86 +4,108 @@ from fastapi import APIRouter
 from app.api.dependencies.repositories import ChunkRepositoryDep
 from app.api.dependencies.auth import PublicWorkspaceDep
 from app.utils.vector import embed_chunks
-from app.utils.text import get_language_enum, rerank_texts
-from app.utils.llm import stream_llm_generate, llm_generate
+from app.utils.text import get_language_enum
+from app.utils.llm import stream_llm_generate, llm_generate, get_llm_prompt
+from typing import List, Tuple
+from app.schemas.chat import ChatDebugResponse, ChatResponse, AskRequest
 
 router = APIRouter()
 
 
 #################################################################################################
 #################################################################################################
-async def prepare_rag_prompt(
-    query: str, 
+async def prepare_rag_data(
+    request: AskRequest, 
     workspace_id: uuid.UUID, 
     chunk_repo: ChunkRepositoryDep
-) -> str | None:
-    
-    q_lang = get_language_enum(query)
-    question_vector = embed_chunks([query], is_query=True)[0]
+) -> Tuple[str | None, List[ChatDebugResponse]]:
+    q_lang = get_language_enum(request.query)
+    question_vector = embed_chunks([request.query])[0]
 
-    relevant_docs = await chunk_repo.search_with_window(
+    db_scores, db_documents = await chunk_repo.search(
         workspace_id=workspace_id,
         lang=q_lang,
         question_vector=question_vector,
-        limit=10, 
-        window_size=3
+        limit=5, 
+        tags=request.tags
     )
     
-    if not relevant_docs:
-        return None
+    if not db_documents:
+        return None, []
 
-    doc_texts = [doc['content'] for doc in relevant_docs]
-    rerank_results = rerank_texts(query=query, texts=doc_texts)
+    db_chunks = [c for d in db_documents for c in d.chunks]
+    db_chunks.sort(key=lambda c: db_scores.get(c.id, 0.0), reverse=True)
 
-    top_docs = rerank_results[:2]
-    context_text = "\n\n".join([doc['text'] for doc in top_docs])
+    context_text = "\n\n".join([c.content for c in db_chunks])
 
-    return f"""
-    Answer the question based on the context below. 
-    If the answer isn't in the context, say you don't know.
+    debug_output = []
+    for db_document in db_documents:
+        for db_chunk in db_document.chunks:
+            db_chunk.db_score = db_scores.get(db_chunk.id, 0.0)                
+        debug_doc = ChatDebugResponse.model_validate(db_document)
+        debug_output.append(debug_doc)
     
-    Context:
-    {context_text}
+    debug_output.sort(key=lambda d: max((c.db_score for c in d.chunks), default=0), reverse=True)
 
-    Question: {query}
+    prompt = get_llm_prompt(
+        lang=q_lang,
+        context_text=context_text,
+        query=request.query
+    )
 
-    Answer:
-    """
-
-
+    return prompt, debug_output
 
 #################################################################################################
 #################################################################################################
-@router.post("/ask")
+@router.post("/ask", response_model=ChatResponse, response_model_exclude_none=True)
 async def ask_question(
     db_workspace: PublicWorkspaceDep,
-    query: str, 
-    chunk_repo: ChunkRepositoryDep
+    request: AskRequest,
+    chunk_repo: ChunkRepositoryDep,
 ):
-    prompt = await prepare_rag_prompt(query, db_workspace.id, chunk_repo)
+    prompt, debug_output = await prepare_rag_data(
+        request=request, 
+        workspace_id=db_workspace.id, 
+        chunk_repo=chunk_repo
+    )
     
     if not prompt:
-        return {"content": "No info found."}
+        return {"content": "No info found.", "debug": [] if request.debug else None}
 
     response = await llm_generate(prompt=prompt)
-    return {"content": response['response']}
+    
+    result = {"content": response['response']}
+    if request.debug:
+        result["debug"] = debug_output
+        
+    return result
 
 #################################################################################################
 #################################################################################################
 @router.post("/ask/stream")
 async def ask_question_stream(
     db_workspace: PublicWorkspaceDep,
-    query: str, 
-    chunk_repo: ChunkRepositoryDep
+    chunk_repo: ChunkRepositoryDep,
+    request: AskRequest
 ):
-    prompt = await prepare_rag_prompt(query, db_workspace.id, chunk_repo)
-    
-    if not prompt:
-        async def empty_gen():
-            yield f"data: {json.dumps({'content': 'No info found.'})}\n\n"
-        return StreamingResponse(empty_gen(), media_type="text/event-stream")
+    prompt, debug_output = await prepare_rag_data(
+        request=request, 
+        workspace_id=db_workspace.id, 
+        chunk_repo=chunk_repo
+    )
 
     async def event_generator():
+        if request.debug:
+            debug_payload = json.dumps({
+                "debug": [debug.model_dump(mode="json") for debug in debug_output], 
+                "content": ""
+            })
+            yield f"data: {debug_payload}\n\n"
+
+        if not prompt:
+            yield f"data: {json.dumps({'content': 'No info found.'})}\n\n"
+            return
+
         async for chunk in stream_llm_generate(prompt=prompt):
             data = json.dumps({"content": chunk['response']})
             yield f"data: {data}\n\n"

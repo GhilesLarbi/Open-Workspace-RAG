@@ -61,7 +61,6 @@ async def get_public_workspace(
     repo: WorkspaceRepositoryDep,
     api_key: str = Depends(api_key_scheme)
 ) -> Workspace:
-    
     db_workspace = await repo.get_by_api_key(api_key)
     if not db_workspace:
         raise HTTPException(
@@ -74,7 +73,7 @@ async def get_public_workspace(
     # FIXME : This is only for testing purposes, 
     # we should remove this in production and require the origin header 
     # to be set and validated against the allowed origins in the workspace settings
-    if not origin : 
+    if not origin or "localhost" in origin or "127.0.0.1" in origin : 
         return db_workspace
     
     if "*" in db_workspace.allowed_origins:

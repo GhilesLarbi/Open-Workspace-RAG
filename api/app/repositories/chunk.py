@@ -1,7 +1,9 @@
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, text
+from sqlalchemy import select, delete
+from sqlalchemy.orm import contains_eager
+from sqlalchemy_utils import Ltree
 from app.repositories.base_repository import BaseRepository
 from app.models.chunk import Chunk
 from app.models.document import Document
@@ -45,78 +47,44 @@ class ChunkRepository(BaseRepository[Chunk]):
         
     #################################################################################
     #################################################################################
-    async def search_with_window(
+    async def search(
         self, 
         workspace_id: uuid.UUID,
         lang: LanguageEnum, 
         question_vector: list[float], 
-        limit: int = 5,
-        window_size: int = 2
-    ) -> List[Dict[str, Any]]:
+        limit: int = 10,
+        tags: List[str] = None
+    ) -> Tuple[Dict[uuid.UUID, float], List[Document]]:
+        
+        score_col = Chunk.embedding.cosine_distance(question_vector).label("score")
         
         stmt = (
-            select(
-                self.model.document_id,
-                self.model.chunk_index,
-                self.model.embedding.cosine_distance(question_vector).label("distance")
-            )
-            .join(Document, self.model.document_id == Document.id)
+            select(Document, Chunk.id.label("chunk_id"), score_col)
+            .join(Chunk, Document.id == Chunk.document_id)
+            .options(contains_eager(Document.chunks))
             .where(
                 Document.workspace_id == workspace_id,
-                Document.lang == lang
+                Document.lang == lang,
+                Document.is_approved == True
             )
-            .order_by("distance")
-            .limit(limit)
-            .cte("seeds")
         )
 
-        query = (
-            select(self.model, Document)
-            .join(Document, self.model.document_id == Document.id)
-            .join(
-                stmt, 
-                (self.model.document_id == stmt.c.document_id) & 
-                (self.model.chunk_index >= stmt.c.chunk_index - window_size) & 
-                (self.model.chunk_index <= stmt.c.chunk_index + window_size)
-            )
-            .order_by(self.model.document_id, self.model.chunk_index)
-        )
+        if tags:
+            ltree_tags = [Ltree(t) for t in tags]
+            stmt = stmt.where(Document.tags.overlap(ltree_tags))
 
-        result = await self.db.execute(query)
-        rows = result.all()
+        stmt = stmt.order_by(score_col).limit(limit)
 
-        grouped_results = {}
-        seen_chunks = set()
+        result = await self.db.execute(stmt)
+        rows = result.unique().all()
 
-        for chunk, doc in rows:
-            unique_key = (doc.id, chunk.id)
-            
-            if unique_key in seen_chunks:
-                continue
-            
-            seen_chunks.add(unique_key)
+        scores = {row.chunk_id: float(row.score) for row in rows}
 
-            if doc.id not in grouped_results:
-                grouped_results[doc.id] = {
-                    "id": doc.id,
-                    "source": doc.url,
-                    "title": doc.title,
-                    "chunks": [],
-                    "chunk_ids": []
-                }
-            
-            grouped_results[doc.id]["chunks"].append(chunk.content)
-            grouped_results[doc.id]["chunk_ids"].append(chunk.id)
+        seen_docs = set()
+        db_documents = []
+        for row in rows:
+            if row.Document.id not in seen_docs:
+                db_documents.append(row.Document)
+                seen_docs.add(row.Document.id)
 
-        final_output = []
-        for doc_data in grouped_results.values():
-            full_text = " ".join(doc_data["chunks"])
-            final_output.append({
-                "id": doc_data["id"],
-                "source": doc_data["source"],
-                "title": doc_data["title"],
-                "content": full_text,
-                "chunk_ids": doc_data["chunk_ids"]
-            })
-
-        return final_output
+        return scores, db_documents

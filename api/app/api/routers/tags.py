@@ -29,7 +29,7 @@ async def add_tag(
 ):
     parts = path.split(".")
     ancestors = [".".join(parts[:i+1]) for i in range(len(parts))]
-    vectors = embed_chunks([p.replace(".", " ") for p in ancestors], is_query=True)
+    vectors = embed_chunks([p.replace(".", " ") for p in ancestors])
     embeddings_map = {p: v for p, v in zip(ancestors, vectors)}
 
     updated_tags = await workspace_repo.sync_tags_and_embeddings(
@@ -94,7 +94,7 @@ async def rename_tag(
     missing_ancestors = [p for p in all_new_ancestors if p not in current_tags and p not in affected_new_paths]
     
     paths_to_embed = list(set(affected_new_paths + missing_ancestors))
-    vectors = embed_chunks([p.replace(".", " ") for p in paths_to_embed], is_query=True)
+    vectors = embed_chunks([p.replace(".", " ") for p in paths_to_embed])
     new_embeddings_map = {p: v for p, v in zip(paths_to_embed, vectors)}
 
     updated_tags = await workspace_repo.rename_sync_hierarchy(

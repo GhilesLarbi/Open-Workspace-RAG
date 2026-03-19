@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { LayoutDashboard, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, BarChart3, Settings, MessageSquare } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -31,6 +31,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Workspace", url: `/${slug}`, icon: LayoutDashboard },
     { title: "Jobs", url: `/${slug}/jobs`, icon: BarChart3 },
     { title: "Documents", url: `/${slug}/documents`, icon: BarChart3 },
+    { title: "Chat", url: `/${slug}/chat`, icon: MessageSquare },
   ];
 
   const navSystem = [

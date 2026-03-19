@@ -1,15 +1,16 @@
+import ollama
 from typing import List
-from app.core.embeddings import get_embedding_model
+from app.core.settings import settings
 
-################################################################################
-################################################################################
-def embed_chunks(texts: List[str], is_query: bool = False) -> List[List[float]]:
+def embed_chunks(texts: List[str]) -> List[List[float]]:
     if not texts:
         return []
-        
-    model = get_embedding_model()
-    prefix = "query: " if is_query else "passage: "
-    prefixed_texts = [f"{prefix}{txt}" for txt in texts]
+
+    client = ollama.Client(host=settings.OLLAMA_HOST)
     
-    vectors = list(model.embed(prefixed_texts))
-    return [vec.tolist() for vec in vectors]
+    response = client.embed(
+        model=settings.OLLAMA_EMBEDDING_MODEL,
+        input=texts
+    )
+    
+    return response['embeddings']
