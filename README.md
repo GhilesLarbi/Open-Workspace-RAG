@@ -9,14 +9,14 @@ docker-compose up -d
 ## 2. Pull Required Models
 Execute these commands to download the models into the ollama container. These are required for the API to function:
 ```bash
-docker exec -it ollama ollama pull llama3.2:1b
+docker exec -it ollama ollama pull qwen2.5:1.5b
 docker exec -it ollama ollama pull bge-m3
 ```
 
 ## 3. Configuration and Model Swapping
 The model names used by the application are defined in `app/core/settings.py`. To change the models, update the following variables:
 
-* **LLM:** `OLLAMA_LLM_MODEL` (Default: `"llama3.2:1b"`)
+* **LLM:** `OLLAMA_LLM_MODEL` (Default: `"qwen2.5:1.5b"`)
 * **Embedding:** `OLLAMA_EMBEDDING_MODEL` (Default: `"bge-m3"`)
 
 ### Changing Models
