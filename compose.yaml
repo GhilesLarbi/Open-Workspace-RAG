@@ -66,7 +66,9 @@ services:
   ########################################################################################
   ########################################################################################
   api:
-    build: ./api
+    build:
+      context: ./api
+      target: api
     container_name: api
     command: python -m app.main
     env_file: .env
@@ -102,7 +104,9 @@ services:
   ########################################################################################
   ########################################################################################
   worker:
-    build: ./api
+    build:
+      context: ./api
+      target: worker
     container_name: worker
     command: taskiq worker app.taskiq.main:broker # --reload --reload-dir app --log-level DEBUG
     env_file: .env
@@ -122,7 +126,9 @@ services:
   ########################################################################################
   ########################################################################################
   scheduler:
-    build: ./api
+    build:
+      context: ./api
+      target: api
     container_name: scheduler
     command: taskiq scheduler app.taskiq.main:scheduler
     env_file: .env

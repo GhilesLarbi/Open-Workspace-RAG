@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Set, Collection, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select, text, delete, update, func
@@ -64,13 +64,15 @@ class DocumentRepository(BaseRepository[Document]):
         workspace_id: uuid.UUID,
         skip: int,
         limit: int,
-        document_ids: Optional[List[uuid.UUID]] = None,
-        job_ids: Optional[List[uuid.UUID]] = None,
+        document_ids: Optional[Collection[uuid.UUID]] = None,
+        job_ids: Optional[Collection[uuid.UUID]] = None,
         is_approved: Optional[bool] = None,
-        langs: Optional[LanguageEnum] = None,
-        actions: Optional[List[JobDocumentAction]] = None
-    ) -> tuple[List[Document], int]:
+        langs: Optional[Collection[LanguageEnum]] = None,
+        actions: Optional[Collection[JobDocumentAction]] = None,
+        query: Optional[str] = None
+    ) -> tuple[List[Document], int, dict[str, int]]:
 
+        # 1. Base statement for items and total count
         stmt = select(self.model).where(self.model.workspace_id == workspace_id)
 
         if document_ids:
@@ -82,6 +84,12 @@ class DocumentRepository(BaseRepository[Document]):
         if langs:
             stmt = stmt.where(self.model.lang.in_(langs))
 
+        if query:
+            stmt = stmt.where(
+                (self.model.url.ilike(f"%{query}%")) | 
+                (self.model.title.ilike(f"%{query}%"))
+            )
+
         if job_ids or actions:
             stmt = stmt.join(JobDocument, JobDocument.document_id == self.model.id)
             if job_ids:
@@ -90,9 +98,22 @@ class DocumentRepository(BaseRepository[Document]):
                 stmt = stmt.where(JobDocument.action.in_(actions))                
             stmt = stmt.distinct()
 
+        # 2. Get total count for the filtered results
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = await self.db.scalar(count_stmt) or 0
 
+        # 3. Get language distribution for the entire workspace (not affected by other filters except workspace)
+        # The user said "number of documents in all the db of that langauge" 
+        # but likely means within the workspace context.
+        lang_stmt = (
+            select(self.model.lang, func.count())
+            .where(self.model.workspace_id == workspace_id)
+            .group_by(self.model.lang)
+        )
+        lang_res = await self.db.execute(lang_stmt)
+        language_counts = {str(row[0].value): row[1] for row in lang_res.all()}
+
+        # 4. Final paginated items statement
         stmt = (
             stmt.options(selectinload(self.model.chunks))
             .order_by(self.model.created_at.desc(), self.model.id.desc())
@@ -103,7 +124,7 @@ class DocumentRepository(BaseRepository[Document]):
         result = await self.db.execute(stmt)
         items = result.scalars().all()
         
-        return list(items), total
+        return list(items), total, language_counts
     
     #################################################################################
     #################################################################################

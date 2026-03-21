@@ -22,9 +22,10 @@ async def get_documents(
     job_ids: Optional[Set[uuid.UUID]] = Query(None),
     is_approved: Optional[bool] = Query(None),
     langs: Optional[Set[LanguageEnum]] = Query(None),
-    actions: Optional[Set[JobDocumentAction]] = Query(None)
+    actions: Optional[Set[JobDocumentAction]] = Query(None),
+    q: Optional[str] = Query(None)
 ):
-    db_documents, total = await document_repo.get_all_by_workspace_paginated(
+    db_documents, total, lang_counts = await document_repo.get_all_by_workspace_paginated(
         workspace_id=db_workspace.id,
         skip=skip,
         limit=limit,
@@ -32,14 +33,16 @@ async def get_documents(
         job_ids=job_ids,
         is_approved=is_approved,
         langs=langs,
-        actions=actions
+        actions=actions,
+        query=q
     )
     
     return PaginatedDocumentResponse(
         items=db_documents, 
         total=total, 
         skip=skip, 
-        limit=limit
+        limit=limit,
+        language_counts=lang_counts
     )
 
 

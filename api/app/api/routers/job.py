@@ -187,14 +187,13 @@ async def sync_progress(
 
             await job_repo.db.refresh(db_job)
 
-            data = {
-                "status": db_job.status, 
-                "task_id": db_job.task_id,
-                "result": db_job.result 
-            }
-            yield f"data: {json.dumps(data)}\n\n"
+            job_response = JobResponse.model_validate(db_job)
+            yield f"data: {job_response.model_dump_json()}\n\n"
 
             if db_job.status in [JobStatus.SUCCESS, JobStatus.FAILURE]:
+                # Keep the connection open so the client can close it cleanly
+                # This prevents Firefox from throwing CORS / connection drop errors
+                await asyncio.sleep(60)
                 break
                 
             await asyncio.sleep(1)

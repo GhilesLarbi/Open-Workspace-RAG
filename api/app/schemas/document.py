@@ -41,3 +41,4 @@ class PaginatedDocumentResponse(BaseModel):
     total: int
     skip: int
     limit: int
+    language_counts: Optional[dict[str, int]] = None

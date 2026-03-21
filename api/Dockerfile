@@ -1,4 +1,6 @@
-FROM python:3.12-slim
+########################################################################################
+########################################################################################
+FROM python:3.12-slim AS base
 WORKDIR /code
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
@@ -13,7 +15,17 @@ RUN pip install --no-cache-dir pipenv
 COPY Pipfile Pipfile.lock /code/
 RUN pipenv install --system --verbose
 
-RUN playwright install --with-deps chromium
-RUN crawl4ai-setup
-
 COPY . /code/
+
+########################################################################################
+# api + scheduler: no browser
+########################################################################################
+FROM base AS api
+# ENV CRAWL4AI_MODE=api
+# RUN crawl4ai-setup
+
+########################################################################################
+# worker: full browser install
+########################################################################################
+FROM base AS worker
+RUN crawl4ai-setup

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "api/AGENTS.md",
+    "dashboard/AGENTS.md"
+  ],
+  "mcp": {
+    "firefox": {
+      "type": "local",
+      "command": ["npx", "-y", "firefox-devtools-mcp@latest", "--connect-existing", "--marionette-port", "2828"],
+      "enabled": true
+    }
+  },
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "docker *": "allow",
+      "docker compose *": "allow",
+      "npm *": "allow",
+      "pnpm *": "allow",
+      "npm run *": "allow",
+      "pnpm run *": "allow",
+      "git *": "allow",
+      "curl *": "allow",
+      "grep *": "allow",
+      "cat *": "allow",
+      "ls *": "allow",
+      "cd *": "allow",
+      "tree *": "allow",
+      "wget *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "echo *": "allow",
+      "jq *": "allow"
+    },
+    "edit": "allow",
+    "read": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "external_directory": {
+      "~/**": "allow"
+    }
+  },
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      ".git/**",
+      "api/**/node_modules/**",
+      "dashboard/**/node_modules/**",
+      "*.pyc",
+      "__pycache__/**",
+      ".venv/**",
+      "venv/**"
+    ]
+  }
+}
