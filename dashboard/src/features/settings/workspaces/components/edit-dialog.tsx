@@ -44,6 +44,7 @@ export function EditWorkspaceDialog({ workspace, open, onOpenChange }: Props) {
 
   useEffect(() => {
     if (open && workspace) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({ name: workspace.name, url: workspace.url, slug: workspace.slug })
       setOrigins(workspace.allowed_origins ?? [])
       setErrors({})

@@ -1,5 +1,6 @@
-import { 
-  ArrowLeft, 
+/* eslint-disable react-refresh/only-export-components */
+import {
+  ArrowLeft,
   LayoutDashboard,
   Loader2, 
   ExternalLink,

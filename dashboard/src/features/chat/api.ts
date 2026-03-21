@@ -1,31 +1,33 @@
-import type { ChatDebugDoc } from './data/schema'
+import type { ChatDebug, SessionResponse } from './data/schema'
 
 type StreamCallbacks = {
-  onDebug: (debug: ChatDebugDoc[]) => void
+  onDebug: (debug: ChatDebug) => void
   onChunk: (content: string) => void
   onDone: () => void
   onError: (error: string) => void
+}
+
+function getBaseUrl() {
+  return import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
 }
 
 export const chatApi = {
   stream: async (
     query: string,
     tags: string[],
+    sessionId: string,
     apiKey: string,
     callbacks: StreamCallbacks
   ): Promise<void> => {
-    const baseUrl =
-      import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
-
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/chat/ask/stream`, {
+      response = await fetch(`${getBaseUrl()}/chat/ask/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
         },
-        body: JSON.stringify({ query, tags, debug: true }),
+        body: JSON.stringify({ query, tags, session_id: sessionId, debug: true }),
       })
     } catch {
       callbacks.onError('Failed to connect to the server.')
@@ -52,7 +54,6 @@ export const chatApi = {
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
-
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
@@ -62,8 +63,7 @@ export const chatApi = {
           if (!raw) continue
 
           try {
-            const parsed: { content: string; debug?: ChatDebugDoc[] } =
-              JSON.parse(raw)
+            const parsed: { content?: string; debug?: ChatDebug } = JSON.parse(raw)
             if (parsed.debug !== undefined) {
               callbacks.onDebug(parsed.debug)
             } else if (parsed.content) {
@@ -79,5 +79,23 @@ export const chatApi = {
     }
 
     callbacks.onDone()
+  },
+
+  fetchHistory: async (
+    sessionId: string,
+    apiKey: string,
+    skip = 0,
+    limit = 20
+  ): Promise<SessionResponse | null> => {
+    try {
+      const response = await fetch(
+        `${getBaseUrl()}/chat/${sessionId}?skip=${skip}&limit=${limit}`,
+        { headers: { 'x-api-key': apiKey } }
+      )
+      if (!response.ok) return null
+      return (await response.json()) as SessionResponse
+    } catch {
+      return null
+    }
   },
 }

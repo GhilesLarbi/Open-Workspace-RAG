@@ -17,8 +17,9 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: always
+    command: redis-server --save 600 1
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
 
@@ -36,32 +37,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  ########################################################################################
-  ########################################################################################
-  # model-init:
-  #   image: ollama/ollama:latest
-  #   container_name: model-init
-  #   tty: true
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   environment:
-  #     - OLLAMA_HOST=ollama:11434
-  #   entrypoint: /bin/sh
-  #   command: 
-  #     - "-c"
-  #     - |
-  #       echo "Pulling LLM..."
-  #       ollama pull qwen2.5:1.5b
-  #       echo "Pulling Embedding..."
-  #       ollama pull bge-m3
-  #       echo "Pulling Reranker..."
-  #       ollama pull bge-reranker-v2-m3
-  #       echo "System Ready."
-        
-  #   depends_on:
-  #     ollama:
-  #       condition: service_healthy
 
   ########################################################################################
   ########################################################################################
@@ -151,7 +126,7 @@ services:
   #   env_file: .env
   #   environment:
   #     - OLLAMA_BASE_URL=http://ollama:11434
-  #     - WEBUI_SECRET_KEY=owsdfajsdoifjasoidjfqowiej
+  #     - WEBUI_SECRET_KEY=33ca73fa4c671e23fc0939010993099e319ff0f3b0163af7e267846574eff39b
   #   volumes:
   #     - open_webui_data:/app/backend/data
   #   depends_on:
@@ -160,20 +135,20 @@ services:
 
   ########################################################################################
   ########################################################################################
-  # redis-insight:
-  #   image: redis/redisinsight:latest
-  #   container_name: redis-insight
-  #   restart: always
-  #   ports:
-  #     - "5541:5540"
-  #   volumes:
-  #     - redis_insight_data:/data
-  #   depends_on:
-  #     - redis
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    restart: always
+    ports:
+      - "5540:5540"
+    volumes:
+      - redis_insight_data:/data
+    depends_on:
+      - redis
 
 volumes:
   postgres_data:
   redis_data:
   ollama_data:
+  redis_insight_data:
   # open_webui_data:
-  # redis_insight_data:

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { ArrowLeft } from 'lucide-react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'

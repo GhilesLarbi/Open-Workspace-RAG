@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import z from 'zod'
 import { ArrowLeft } from 'lucide-react'
 import { useNavigate, createFileRoute } from '@tanstack/react-router'

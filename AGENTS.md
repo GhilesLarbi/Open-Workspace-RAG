@@ -21,7 +21,7 @@ Everything runs on-device. No calls to OpenAI, Anthropic, or any external AI API
 | Component | Technology | Port |
 |-----------|------------|------|
 | Database | pgvector/pgvector:pg17 | 5432 |
-| Redis | redis:7-alpine | 6380 |
+| Redis | redis:7-alpine | 6379 |
 | LLM | ollama/ollama | 11434 |
 | API | FastAPI + TaskIQ (Python 3.12) | 8000 |
 | Dashboard | Vite/React (pnpm) | 3000 |

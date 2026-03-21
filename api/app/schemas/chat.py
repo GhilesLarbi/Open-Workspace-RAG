@@ -7,45 +7,60 @@ from app.schemas.enums import LanguageEnum
 
 #############################################################################
 #############################################################################
-class ChunkDebugResponse(BaseModel):
+class SessionChunk(BaseModel):
     id: UUID
-    chunk_index: int
+    document_id: UUID
     content: str
-    db_score: Optional[float] = None
+    score: float
     
     model_config = ConfigDict(from_attributes=True)
 
-#############################################################################
-#############################################################################
-class ChatDebugResponse(BaseModel):
+class SessionTurn(BaseModel):
+    query: str
+    response: str
+    chunks: List[SessionChunk] = Field(default_factory=list)
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+class ChunkDebug(BaseModel):
+    id: UUID
+    chunk_index: int
+    content: str
+    score: Optional[float] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class DocumentDebug(BaseModel):
     id: UUID
     workspace_id: UUID
     is_approved: bool
     url: str
     title: Optional[str] = None
     lang: LanguageEnum
-    tags: List[str] =[]
-    suggestions: List[str] =[]
+    tags: List[str] = []
+    suggestions: List[str] = []
     created_at: datetime
     updated_at: datetime
-
-    chunks: List[ChunkDebugResponse]
-
+    chunks: List[ChunkDebug]
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("tags", mode="before")
     @classmethod
     def transform_ltree_to_str(cls, v):
-        if v is None:
-            return[]
-        return [str(tag) for tag in v]
+        return [str(tag) for tag in v] if v else []
 
+class SessionDebug(BaseModel):
+    session_id: UUID
+    workspace_id: UUID
+    turns: List[SessionTurn] = Field(default_factory=list)
 
+class ChatDebug(BaseModel):
+    documents: List[DocumentDebug]
+    session: SessionDebug
 
 #############################################################################
 #############################################################################
 class AskRequest(BaseModel):
     query: str
+    session_id: UUID
     tags: List[str] = Field(default_factory=list)
     debug: bool = False
 
@@ -53,4 +68,17 @@ class AskRequest(BaseModel):
 #############################################################################
 class ChatResponse(BaseModel):
     content: str
-    debug: Optional[List[ChatDebugResponse]] = None
+    debug: Optional[ChatDebug] = None
+
+
+#############################################################################
+#############################################################################
+class SessionTurnResponse(BaseModel):
+    query: str
+    response: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+class SessionResponse(BaseModel):
+    session_id: UUID
+    workspace_id: UUID
+    turns : List[SessionTurnResponse] = Field(default_factory=list)

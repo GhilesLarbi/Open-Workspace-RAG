@@ -22,8 +22,16 @@ export function Chat() {
   const apiKey = workspace?.api_key ?? ''
   const isMobile = useIsMobile()
 
-  const { messages, timings, isStreaming, currentDebug, sendMessage } =
-    useChat(apiKey)
+  const {
+    messages,
+    timings,
+    isStreaming,
+    currentDebug,
+    isLoadingHistory,
+    hasMoreHistory,
+    sendMessage,
+    loadMoreHistory,
+  } = useChat(apiKey)
 
   const handleSend = (query: string) => {
     void sendMessage(query, [])
@@ -85,15 +93,15 @@ export function Chat() {
           className='flex-1 overflow-hidden rounded-lg border'
         >
           {/* Chat panel */}
-          <ResizablePanel
-            defaultSize={isMobile ? 50 : 50}
-            minSize={isMobile ? 40 : 30}
-          >
+          <ResizablePanel defaultSize={50} minSize={isMobile ? 40 : 30}>
             <div className='flex h-full flex-col overflow-hidden'>
               <ChatMessages
                 messages={messages}
                 timings={timings}
                 isStreaming={isStreaming}
+                isLoadingHistory={isLoadingHistory}
+                hasMoreHistory={hasMoreHistory}
+                onLoadMore={loadMoreHistory}
               />
               <ChatInput onSend={handleSend} disabled={isStreaming} />
             </div>
@@ -102,13 +110,10 @@ export function Chat() {
           <ResizableHandle withHandle />
 
           {/* Debug panel */}
-          <ResizablePanel
-            defaultSize={isMobile ? 50 : 50}
-            minSize={isMobile ? 20 : 20}
-          >
+          <ResizablePanel defaultSize={50} minSize={20}>
             <div className='flex h-full flex-col'>
               <div className='flex-1 overflow-hidden'>
-                <DebugPanel docs={currentDebug} />
+                <DebugPanel debug={currentDebug} />
               </div>
             </div>
           </ResizablePanel>

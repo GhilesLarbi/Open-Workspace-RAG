@@ -1,79 +1,136 @@
 from app.schemas.enums import LanguageEnum
-from ollama import AsyncClient
-from typing import AsyncGenerator, Dict, Any
+from ollama import AsyncClient, Options, Message, ChatResponse
+from typing import AsyncGenerator, List
+from app.schemas.chat import SessionTurn
 from app.core.settings import settings
+import math
 
 
 
-LLM_OPTIONS = {
-    "temperature": 0,
-    "num_thread": 8,
-    "num_ctx": 4096,
-    "num_batch": 512
-}
-
+LLM_OPTIONS = Options(
+    temperature=0,
+    num_thread=8,
+    num_ctx=8192*2,
+    num_batch=512,
+    use_mlock=True,
+)
 
 #######################################################################
 #######################################################################
-async def stream_llm_generate(prompt: str) -> AsyncGenerator[Dict[str, Any], None]:
+async def stream_llm_chat(messages: List[Message]) -> AsyncGenerator[ChatResponse, None]:
     client = AsyncClient(host=settings.OLLAMA_HOST)    
-    async for chunk in await client.generate(
+    async for chunk in await client.chat(
         model=settings.OLLAMA_LLM_MODEL, 
-        prompt=prompt,
+        messages=messages,
         options=LLM_OPTIONS,
-        stream=True 
+        stream=True,
+        logprobs=True
     ):
         yield chunk
 
 #######################################################################
 #######################################################################
-async def llm_generate(prompt: str) -> Dict[str, Any]:
+async def llm_chat(messages: List[Message]) -> ChatResponse:
     client = AsyncClient(host=settings.OLLAMA_HOST)
-    return await client.generate(
+    return await client.chat(
         model=settings.OLLAMA_LLM_MODEL, 
-        prompt=prompt,
+        messages=messages,
         options=LLM_OPTIONS,
-        stream=False
+        stream=False,
+        logprobs=True
     )
 
 
 #######################################################################
 #######################################################################
-def get_llm_prompt(lang: LanguageEnum, context_text: str, query: str) -> str:
-    prompts = {
+def get_llm_messages(
+    lang: LanguageEnum, 
+    facts: List[str], 
+    session_turns: List[SessionTurn], 
+    query: str
+) -> List[Message]:
+
+    facts_text = ",".join(facts)
+
+    instructions = {
         LanguageEnum.EN: f"""
-Answer the question based on the text below. 
-If the answer isn't in the text, say you don't know.
+Answer the user's question using the FACTS provided below.
+Use the conversation history to understand context or pronouns (like "it", "they", "before").
+If the answer is not contained within the facts or history, strictly state that you do not know.
 
-Text:
-{context_text}
-
-Question: {query}
-
-Answer:
+FACTS: 
+{facts_text}
 """,
+
         LanguageEnum.FR: f"""
-Répondez à la question en vous basant sur le texte ci-dessous. 
-Si la réponse n'est pas dans le texte, dites que vous ne savez pas.
+Répondez à la question de l'utilisateur en utilisant les FAITS fournis ci-dessous.
+Utilisez l'historique pour comprendre le contexte ou les pronoms (comme "celui-ci", "ça", "avant").
+Si la réponse n'est pas contenue dans les faits ou l'historique, dites strictement que vous ne savez pas.
 
-Texte :
-{context_text}
-
-Question : {query}
-
-Réponse :
+FAITS : 
+{facts_text}
 """,
         LanguageEnum.AR: f"""
-أجب على السؤال بناءً على النص أدناه. 
-إذا لم تكن الإجابة موجودة في النص، قل أنك لا تعرف.
+أجب على سؤال المستخدم باستخدام الحقائق المقدمة أدناه.
+استخدم سجل المحادثة لفهم السياق أو الضمائر (مثل "ذلك"، "هم"، "سابقاً").
+إذا لم تكن الإجابة موجودة في الحقائق أو المحادثة، قل بوضوح أنك لا تعرف.
 
-النص:
-{context_text}
-
-السؤال: {query}
-
-الإجابة:
+الحقائق: 
+{facts_text}
 """
     }
     
-    return prompts.get(lang, prompts[LanguageEnum.EN]).strip()
+    messages = [
+        Message(
+            role="system",
+            content=instructions.get(lang, instructions[LanguageEnum.EN]),
+        )
+    ]
+
+    for turn in session_turns:
+        messages.append(Message(
+            role="user", 
+            content=turn.query
+        ))
+        messages.append(Message(
+            role="assistant", 
+            content=turn.response
+        ))
+
+    # for fact in facts : 
+    #     messages.append(Message(
+    #         role="user", 
+    #         content=f"CONTEXT DATA:\n{fact}"
+    #     ))
+
+    messages.append(Message(
+        role="user", 
+        content=query
+    ))
+    return messages
+
+
+#######################################################################
+#######################################################################
+def calc_conf_metrics(logprobs_list):
+    if not logprobs_list:
+        return {"avg": 0, "min": 0, "geometric": 0}
+
+    # Convert logprobs to linear probabilities
+    probs = [math.exp(lp['logprob']) for lp in logprobs_list]
+    
+    # 1. Average Prob
+    avg_prob = sum(probs) / len(probs)
+    
+    # 2. Minimum Prob (The 'Weak Link')
+    min_prob = min(probs)
+    
+    # 3. Geometric Mean
+    total_logprob = sum(lp['logprob'] for lp in logprobs_list)
+    geometric_mean_prob = math.exp(total_logprob / len(logprobs_list))
+    
+    return {
+        "average_confidence": round(avg_prob, 4),
+        "minimum_confidence": round(min_prob, 4),
+        "sequence_confidence": round(geometric_mean_prob, 4)
+    }

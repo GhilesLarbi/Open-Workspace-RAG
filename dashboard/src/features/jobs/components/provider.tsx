@@ -23,6 +23,7 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useJobsContext = () => {
   const ctx = React.useContext(JobsContext)
   if (!ctx) throw new Error('useJobsContext must be used within <JobsProvider>')

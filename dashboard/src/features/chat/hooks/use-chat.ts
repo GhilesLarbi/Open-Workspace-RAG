@@ -1,19 +1,60 @@
+import { useEffect, useRef } from 'react'
 import { useChatStore } from '@/stores/chat-store'
+import { useSession } from './use-session'
 
 export type { MessageTiming } from '@/stores/chat-store'
 
 export function useChat(apiKey: string) {
-  const { messages, timings, isStreaming, activeDebug, sendMessage: storeSend, clearMessages } =
-    useChatStore()
+  const { sessionId, resetSession } = useSession()
+  const historyFetchedRef = useRef<string | null>(null)
 
-  const sendMessage = (query: string, tags: string[]) => storeSend(query, tags, apiKey)
+  const {
+    messages,
+    timings,
+    isStreaming,
+    activeDebug,
+    isLoadingHistory,
+    hasMoreHistory,
+    sendMessage: storeSend,
+    loadHistory,
+    clearMessages,
+  } = useChatStore()
+
+  // Fetch initial history whenever sessionId changes (new workspace or new session)
+  useEffect(() => {
+    if (!apiKey) return
+    if (historyFetchedRef.current === sessionId) return
+    historyFetchedRef.current = sessionId
+
+    useChatStore.getState().clearMessages()
+    void useChatStore.getState().loadHistory(sessionId, apiKey, false)
+  }, [sessionId, apiKey])
+
+  const sendMessage = (query: string, tags: string[]) => {
+    void storeSend(query, tags, sessionId, apiKey)
+  }
+
+  const loadMoreHistory = () => {
+    if (!apiKey || isLoadingHistory || !hasMoreHistory) return
+    void loadHistory(sessionId, apiKey, true)
+  }
 
   const currentDebug =
-    activeDebug.length > 0
-      ? activeDebug
-      : ([...messages]
-          .reverse()
-          .find((m) => m.role === 'assistant' && m.debug)?.debug ?? [])
+    activeDebug ??
+    [...messages].reverse().find((m) => m.role === 'assistant' && m.debug)?.debug ??
+    null
 
-  return { messages, timings, isStreaming, currentDebug, sendMessage, clearMessages }
+  return {
+    messages,
+    timings,
+    isStreaming,
+    currentDebug,
+    isLoadingHistory,
+    hasMoreHistory,
+    sessionId,
+    sendMessage,
+    loadMoreHistory,
+    clearMessages,
+    resetSession,
+  }
 }

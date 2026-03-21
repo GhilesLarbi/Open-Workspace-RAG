@@ -1,31 +1,60 @@
 import { create } from 'zustand'
 import { chatApi } from '@/features/chat/api'
-import type { ChatMessage, ChatDebugDoc } from '@/features/chat/data/schema'
+import type { ChatMessage, ChatDebug, SessionTurnResponse } from '@/features/chat/data/schema'
 
 export type MessageTiming = {
   startedAt: number
   duration: number | null
 }
 
+const HISTORY_PAGE_SIZE = 20
+
 type ChatState = {
   messages: ChatMessage[]
   timings: (MessageTiming | null)[]
   isStreaming: boolean
-  activeDebug: ChatDebugDoc[]
+  activeDebug: ChatDebug | null
+  isLoadingHistory: boolean
+  hasMoreHistory: boolean
+  historySkip: number
 }
 
 type ChatActions = {
-  sendMessage: (query: string, tags: string[], apiKey: string) => Promise<void>
+  sendMessage: (
+    query: string,
+    tags: string[],
+    sessionId: string,
+    apiKey: string
+  ) => Promise<void>
+  loadHistory: (sessionId: string, apiKey: string, prepend?: boolean) => Promise<void>
   clearMessages: () => void
+}
+
+function turnsToMessages(turns: SessionTurnResponse[]): {
+  messages: ChatMessage[]
+  timings: (MessageTiming | null)[]
+} {
+  const messages: ChatMessage[] = []
+  const timings: (MessageTiming | null)[] = []
+  for (const turn of turns) {
+    messages.push({ role: 'user', content: turn.query })
+    timings.push(null)
+    messages.push({ role: 'assistant', content: turn.response })
+    timings.push(null)
+  }
+  return { messages, timings }
 }
 
 export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
   messages: [],
   timings: [],
   isStreaming: false,
-  activeDebug: [],
+  activeDebug: null,
+  isLoadingHistory: false,
+  hasMoreHistory: false,
+  historySkip: 0,
 
-  sendMessage: async (query, tags, apiKey) => {
+  sendMessage: async (query, tags, sessionId, apiKey) => {
     if (get().isStreaming || !query.trim() || !apiKey) return
 
     const now = Date.now()
@@ -38,12 +67,12 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       ],
       timings: [...state.timings, null, { startedAt: now, duration: null }],
       isStreaming: true,
-      activeDebug: [],
+      activeDebug: null,
     }))
 
-    let debugData: ChatDebugDoc[] = []
+    let debugData: ChatDebug | null = null
 
-    await chatApi.stream(query, tags, apiKey, {
+    await chatApi.stream(query, tags, sessionId, apiKey, {
       onDebug: (debug) => {
         debugData = debug
         set({ activeDebug: debug })
@@ -63,7 +92,10 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
           const messages = [...state.messages]
           const last = messages[messages.length - 1]
           if (last?.role === 'assistant') {
-            messages[messages.length - 1] = { ...last, debug: debugData }
+            messages[messages.length - 1] = {
+              ...last,
+              debug: debugData ?? undefined,
+            }
           }
           const timings = [...state.timings]
           const idx = timings.length - 1
@@ -92,5 +124,38 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     })
   },
 
-  clearMessages: () => set({ messages: [], timings: [], activeDebug: [] }),
+  loadHistory: async (sessionId, apiKey, prepend = false) => {
+    const state = get()
+    if (state.isLoadingHistory) return
+
+    set({ isLoadingHistory: true })
+
+    const skip = prepend ? state.historySkip + HISTORY_PAGE_SIZE : 0
+    const data = await chatApi.fetchHistory(sessionId, apiKey, skip, HISTORY_PAGE_SIZE)
+
+    if (!data || data.turns.length === 0) {
+      set({ isLoadingHistory: false, hasMoreHistory: false })
+      return
+    }
+
+    const { messages: newMessages, timings: newTimings } = turnsToMessages(data.turns)
+
+    set((s) => ({
+      messages: [...newMessages, ...s.messages],
+      timings: [...newTimings, ...s.timings],
+      isLoadingHistory: false,
+      hasMoreHistory: data.turns.length === HISTORY_PAGE_SIZE,
+      historySkip: skip,
+    }))
+  },
+
+  clearMessages: () =>
+    set({
+      messages: [],
+      timings: [],
+      activeDebug: null,
+      isLoadingHistory: false,
+      hasMoreHistory: false,
+      historySkip: 0,
+    }),
 }))
