@@ -29,6 +29,7 @@ export function Chat() {
     currentDebug,
     isLoadingHistory,
     hasMoreHistory,
+    sessionId,
     sendMessage,
     loadMoreHistory,
   } = useChat(apiKey)
@@ -102,6 +103,8 @@ export function Chat() {
                 isLoadingHistory={isLoadingHistory}
                 hasMoreHistory={hasMoreHistory}
                 onLoadMore={loadMoreHistory}
+                sessionId={sessionId}
+                apiKey={apiKey}
               />
               <ChatInput onSend={handleSend} disabled={isStreaming} />
             </div>

@@ -98,4 +98,16 @@ export const chatApi = {
       return null
     }
   },
+
+  rate: async (sessionId: string, isHelpful: boolean, apiKey: string): Promise<void> => {
+    const response = await fetch(`${getBaseUrl()}/ratings/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({ session_id: sessionId, is_helpful: isHelpful }),
+    })
+    if (!response.ok) throw new Error(`Failed to submit rating: ${response.status}`)
+  },
 }

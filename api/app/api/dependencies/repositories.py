@@ -11,6 +11,7 @@ from app.repositories.document import DocumentRepository
 from app.repositories.chunk import ChunkRepository
 from app.repositories.job import JobRepository
 from app.repositories.session import SessionRepository
+from app.repositories.rating import RatingRepository
 
 
 
@@ -29,6 +30,9 @@ def get_chunk_repo(db: AsyncSession = Depends(get_db)) -> ChunkRepository:
 def get_job_repo(db: AsyncSession = Depends(get_db)) -> JobRepository:
     return JobRepository(db)
 
+def get_rating_repo(db: AsyncSession = Depends(get_db)) -> RatingRepository:
+    return RatingRepository(db)
+
 
 def get_session_repo(redis: Redis = Depends(get_redis)) -> SessionRepository:
     return SessionRepository(redis)
@@ -38,4 +42,5 @@ WorkspaceRepositoryDep = Annotated[WorkspaceRepository, Depends(get_workspace_re
 DocumentRepositoryDep = Annotated[DocumentRepository, Depends(get_document_repo)]
 ChunkRepositoryDep = Annotated[ChunkRepository, Depends(get_chunk_repo)]
 JobRepositoryDep = Annotated[JobRepository, Depends(get_job_repo)]
+RatingRepositoryDep = Annotated[RatingRepository, Depends(get_rating_repo)]
 SessionRepositoryDep = Annotated[SessionRepository, Depends(get_session_repo)]

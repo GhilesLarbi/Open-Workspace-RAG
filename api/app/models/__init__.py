@@ -5,3 +5,4 @@ from app.models.organization import Organization
 from app.models.workspace import Workspace
 from app.models.job import Job
 from app.models.job_document import JobDocument
+from app.models.rating import Rating

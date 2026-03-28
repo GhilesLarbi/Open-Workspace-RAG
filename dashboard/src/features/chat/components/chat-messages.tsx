@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/message'
 import type { ChatMessage } from '../data/schema'
 import type { MessageTiming } from '../hooks/use-chat'
+import { useRating } from '../hooks/use-rating'
 
 type Props = {
   messages: ChatMessage[]
@@ -20,9 +21,11 @@ type Props = {
   isLoadingHistory: boolean
   hasMoreHistory: boolean
   onLoadMore: () => void
+  sessionId: string
+  apiKey: string
 }
 
-type Feedback = 'liked' | 'disliked' | null
+type RatedIdx = { idx: number; value: 'liked' | 'disliked' } | null
 
 function formatSeconds(ms: number): string {
   return (ms / 1000).toFixed(1) + 's'
@@ -50,9 +53,15 @@ export function ChatMessages({
   isLoadingHistory,
   hasMoreHistory,
   onLoadMore,
+  sessionId,
+  apiKey,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const [feedback, setFeedback] = useState<Record<number, Feedback>>({})
+  const [ratedIdx, setRatedIdx] = useState<RatedIdx>(null)
+  const { mutate: submitRating, isPending: isRatingPending } = useRating(apiKey)
+
+  const lastAssistantIdx = messages.reduce((last, msg, i) => (msg.role === 'assistant' ? i : last), -1)
+  const rated = ratedIdx?.idx === lastAssistantIdx ? ratedIdx.value : null
 
   // Track whether user is close enough to the bottom to keep auto-scrolling
   const isAtBottomRef = useRef(true)
@@ -198,44 +207,46 @@ export function ChatMessages({
                         <Copy className='size-3.5' />
                       </Button>
                     </MessageAction>
-                    <MessageAction tooltip='Helpful'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className={cn(
-                          'h-7 w-7 rounded-full',
-                          feedback[i] === 'liked' &&
-                            'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
-                        )}
-                        onClick={() =>
-                          setFeedback((prev) => ({
-                            ...prev,
-                            [i]: prev[i] === 'liked' ? null : 'liked',
-                          }))
-                        }
-                      >
-                        <ThumbsUp className='size-3.5' />
-                      </Button>
-                    </MessageAction>
-                    <MessageAction tooltip='Not helpful'>
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className={cn(
-                          'h-7 w-7 rounded-full',
-                          feedback[i] === 'disliked' &&
-                            'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                        )}
-                        onClick={() =>
-                          setFeedback((prev) => ({
-                            ...prev,
-                            [i]: prev[i] === 'disliked' ? null : 'disliked',
-                          }))
-                        }
-                      >
-                        <ThumbsDown className='size-3.5' />
-                      </Button>
-                    </MessageAction>
+                    {i === lastAssistantIdx && (
+                      <>
+                        <MessageAction tooltip='Helpful'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            disabled={rated !== null || isRatingPending}
+                            className={cn(
+                              'h-7 w-7 rounded-full',
+                              rated === 'liked' &&
+                                'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                            )}
+                            onClick={() => {
+                              setRatedIdx({ idx: i, value: 'liked' })
+                              submitRating({ sessionId, isHelpful: true })
+                            }}
+                          >
+                            <ThumbsUp className='size-3.5' />
+                          </Button>
+                        </MessageAction>
+                        <MessageAction tooltip='Not helpful'>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            disabled={rated !== null || isRatingPending}
+                            className={cn(
+                              'h-7 w-7 rounded-full',
+                              rated === 'disliked' &&
+                                'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                            )}
+                            onClick={() => {
+                              setRatedIdx({ idx: i, value: 'disliked' })
+                              submitRating({ sessionId, isHelpful: false })
+                            }}
+                          >
+                            <ThumbsDown className='size-3.5' />
+                          </Button>
+                        </MessageAction>
+                      </>
+                    )}
                   </MessageActions>
                 )}
 
