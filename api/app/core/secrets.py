@@ -13,6 +13,15 @@ class Secrets(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: int
 
+    SEAWEEDFS_HOST: str
+    SEAWEEDFS_S3_PORT: int
+    # AWS_ACCESS_KEY_ID: str
+    # AWS_SECRET_ACCESS_KEY: str
+
+    @property
+    def SEAWEEDFS_S3_URL(self) -> str:
+        return f"http://{self.SEAWEEDFS_HOST}:{self.SEAWEEDFS_S3_PORT}"
+
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

@@ -32,6 +32,8 @@ passlib = {extras = ["bcrypt"], version = "*"}
 pyjwt = "*"
 python-multipart = "*"
 sqlalchemy-utils = "*"
+pymupdf4llm = "*"
+aioboto3 = "*"
 
 [dev-packages]
 

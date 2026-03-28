@@ -8,6 +8,13 @@ from app.schemas.chunk import ChunkResponse
 
 #############################################################################
 #############################################################################
+class DocumentSuggestion(BaseModel):
+    query: str
+    answer: str
+    rating: Optional[float] = None
+
+#############################################################################
+#############################################################################
 class DocumentResponse(BaseModel):
     id: UUID
     workspace_id: UUID
@@ -15,18 +22,18 @@ class DocumentResponse(BaseModel):
     url: str
     title: Optional[str] = None
     lang: LanguageEnum
-    tags: List[str] =[]
-    suggestions: List[str] =[]
+    tag: Optional[str] = None
+    suggestions: List[DocumentSuggestion] = []
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator("tags", mode="before")
+    @field_validator("tag", mode="before")
     @classmethod
     def transform_ltree_to_str(cls, v):
         if v is None:
-            return[]
-        return [str(tag) for tag in v]
+            return None
+        return str(v)
 
 
 #############################################################################

@@ -1,31 +1,23 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { 
-  ArrowLeft, 
-  Tag, 
-  Clock, 
-  Layers, 
+import {
+  ArrowLeft,
+  Tag,
+  Clock,
+  Layers,
   Info,
   ExternalLink,
   FileText,
-  Lightbulb,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderOpen
 } from 'lucide-react'
 import { useState } from 'react'
 import { useDocument } from '@/features/documents/hooks'
-import { useWorkspaceTags } from '@/features/tags/hooks/use-workspace-tags' // adjust path
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { ProfileDropdown } from '@/components/profile-dropdown'
-import { TagTree } from '@/components/tags'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -72,13 +64,7 @@ function DocumentDetail() {
   const { documentId } = Route.useParams()
   const navigate = useNavigate()
   const { data: document, isLoading } = useDocument(documentId)
-  const { tags: workspaceTagStrings } = useWorkspaceTags() // Get all workspace tags
   const [activeTab, setActiveTab] = useState('overview')
-
-  // Convert document tags to a Set for O(1) lookup
-  const documentTagSet = React.useMemo(() => {
-    return new Set(document?.tags || [])
-  }, [document?.tags])
 
   const sidebarNavItems = [
     {
@@ -91,11 +77,6 @@ function DocumentDetail() {
       title: 'Chunks',
       icon: <Layers size={18} />,
     },
-    ...(document?.suggestions?.length ? [{
-      id: 'suggestions',
-      title: 'Suggestions',
-      icon: <Lightbulb size={18} />,
-    }] : [])
   ]
 
   if (isLoading) {
@@ -269,59 +250,16 @@ function DocumentDetail() {
 
                     <div>
                       <h4 className='font-medium mb-3 text-sm text-muted-foreground flex items-center gap-2'>
-                        <Tag className="h-4 w-4" /> Tags 
+                        <Tag className="h-4 w-4" /> Tag
                       </h4>
-                      {document.tags.length > 0 ? (
-                        <>
-                          <div className='rounded-md border bg-card p-2 max-h-[300px] overflow-auto'>
-                            <TagTree 
-                              tags={workspaceTagStrings}
-                              defaultExpandedPaths={document.tags}
-                              renderNode={({ node, depth, isExpanded, hasChildren, onToggleExpand }) => {
-                                const isDocumentTag = documentTagSet.has(node.fullPath)
-                                
-                                return (
-                                  <div
-                                    className={cn(
-                                      'flex items-center gap-1.5 py-1.5 px-2 rounded-sm transition-all',
-                                      hasChildren && 'cursor-pointer hover:bg-muted/60',
-                                      !hasChildren && 'pl-[26px]',
-                                      isDocumentTag && 'bg-primary/10 text-primary font-medium'
-                                    )}
-                                    style={{ paddingLeft: hasChildren ? `${depth * 12 + 8}px` : `${depth * 12 + 26}px` }}
-                                    onClick={hasChildren ? onToggleExpand : undefined}
-                                  >
-                                    {hasChildren ? (
-                                      <span className="flex items-center justify-center text-muted-foreground">
-                                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                      </span>
-                                    ) : null}
-                                    
-                                    {hasChildren ? (
-                                      isExpanded ? (
-                                        <FolderOpen size={14} className={isDocumentTag ? "text-primary" : "text-muted-foreground"} />
-                                      ) : (
-                                        <Folder size={14} className={isDocumentTag ? "text-primary" : "text-muted-foreground"} />
-                                      )
-                                    ) : (
-                                      <Tag size={14} className={isDocumentTag ? "text-primary" : "text-muted-foreground"} />
-                                    )}
-                                    
-                                    <span className="text-sm">{node.name}</span>
-                                    
-                                    {isDocumentTag && (
-                                      <Check size={12} className="text-primary ml-auto" />
-                                    )}
-                                  </div>
-                                )
-                              }}
-                            />
-                          </div>
-                        </>
+                      {document.tag ? (
+                        <Badge variant='secondary' className='font-mono'>
+                          {document.tag}
+                        </Badge>
                       ) : (
                         <div className='rounded-md border border-dashed bg-muted/30 p-4 text-center'>
                           <Tag className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">No tags assigned</p>
+                          <p className="text-sm text-muted-foreground">No tag assigned</p>
                         </div>
                       )}
                     </div>
@@ -367,20 +305,6 @@ function DocumentDetail() {
                 </DocumentContentSection>
               )}
 
-              {activeTab === 'suggestions' && (
-                <DocumentContentSection title='Suggestions' desc='Automated insights and recommendations'>
-                  <div className='grid gap-4 sm:grid-cols-2'>
-                    {document.suggestions.map((s, i) => (
-                      <div key={i} className='p-4 rounded-lg border bg-card flex gap-3'>
-                        <div className='mt-1 text-primary shrink-0'>
-                          <Lightbulb className='h-4 w-4' />
-                        </div>
-                        <p className='text-sm text-foreground leading-relaxed'>{s}</p>
-                      </div>
-                    ))}
-                  </div>
-                </DocumentContentSection>
-              )}
             </div>
           </div>
         </div>

@@ -23,8 +23,9 @@ type ChatActions = {
   sendMessage: (
     query: string,
     tags: string[],
-    sessionId: string,
-    apiKey: string
+    sessionId: string | null,
+    apiKey: string,
+    onSessionId: (id: string) => void
   ) => Promise<void>
   loadHistory: (sessionId: string, apiKey: string, prepend?: boolean) => Promise<void>
   clearMessages: () => void
@@ -54,7 +55,7 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
   hasMoreHistory: false,
   historySkip: 0,
 
-  sendMessage: async (query, tags, sessionId, apiKey) => {
+  sendMessage: async (query, tags, sessionId, apiKey, onSessionId) => {
     if (get().isStreaming || !query.trim() || !apiKey) return
 
     const now = Date.now()
@@ -73,6 +74,7 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     let debugData: ChatDebug | null = null
 
     await chatApi.stream(query, tags, sessionId, apiKey, {
+      onSessionId,
       onDebug: (debug) => {
         debugData = debug
         set({ activeDebug: debug })

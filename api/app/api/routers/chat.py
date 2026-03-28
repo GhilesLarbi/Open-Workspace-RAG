@@ -6,7 +6,7 @@ from app.api.dependencies.auth import PublicWorkspaceDep
 from app.utils.vector import embed_chunks
 from app.utils.text import get_language_enum
 from app.utils.llm import stream_llm_chat, llm_chat, get_llm_messages
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from ollama import Message
 from app.schemas.chat import  (
     ChatDebug, 
@@ -24,16 +24,35 @@ router = APIRouter()
 
 #################################################################################################
 #################################################################################################
+async def resolve_session_id(
+    session_id: Optional[uuid.UUID],
+    workspace_id: uuid.UUID,
+    session_repo: SessionRepositoryDep,
+) -> str:
+    if session_id is None:
+        return str(uuid.uuid4())
+    is_exists = await session_repo.session_exists(
+        workspace_id=workspace_id, 
+        session_id=str(session_id)
+    )
+    if not is_exists:
+        return str(uuid.uuid4())
+    return str(session_id)
+
+
+#################################################################################################
+#################################################################################################
 async def prepare_rag_data(
-    request: AskRequest, 
-    workspace_id: uuid.UUID, 
+    request: AskRequest,
+    session_id: str,
+    workspace_id: uuid.UUID,
     chunk_repo: ChunkRepositoryDep,
     session_repo: SessionRepositoryDep
 ) -> Tuple[List[Message] | None, ChatDebug]:
-    
+
     session_turns = await session_repo.get_turns(
         workspace_id=workspace_id,
-        session_id=request.session_id,
+        session_id=session_id,
         skip=0,
         limit=5,
     )
@@ -45,10 +64,10 @@ async def prepare_rag_data(
         workspace_id=workspace_id,
         lang=q_lang,
         question_vector=question_vector,
-        limit=5, 
+        limit=5,
         tags=request.tags
     )
-    
+
     if not db_documents:
         return None, None
 
@@ -58,15 +77,15 @@ async def prepare_rag_data(
     docs_debug = []
     for doc in db_documents:
         for chunk in doc.chunks:
-            chunk.score = scores.get(chunk.id, 0.0)                
+            chunk.score = scores.get(chunk.id, 0.0)
         docs_debug.append(DocumentDebug.model_validate(doc))
-    
+
     docs_debug.sort(key=lambda d: max((c.score for c in d.chunks), default=0), reverse=True)
 
     chat_debug = ChatDebug(
         documents=docs_debug,
         session=SessionDebug(
-            session_id=request.session_id,
+            session_id=uuid.UUID(session_id),
             workspace_id=workspace_id,
             turns=session_turns
         )
@@ -131,6 +150,8 @@ async def get_chat_history(
         limit=limit
     )
 
+    await session_repo.refresh_ttl(db_workspace.id, str(session_id))
+
     return {
         "session_id": session_id,
         "workspace_id": db_workspace.id,
@@ -146,15 +167,26 @@ async def ask_question(
     chunk_repo: ChunkRepositoryDep,
     session_repo: SessionRepositoryDep,
 ):
-    prompt_messages, chat_debug = await prepare_rag_data(
-        request=request, 
+    session_id = await resolve_session_id(
+        session_id=request.session_id, 
         workspace_id=db_workspace.id, 
+        session_repo=session_repo
+    )
+
+    prompt_messages, chat_debug = await prepare_rag_data(
+        request=request,
+        session_id=session_id,
+        workspace_id=db_workspace.id,
         chunk_repo=chunk_repo,
         session_repo=session_repo
     )
-    
+
     if not prompt_messages:
-        return {"content": "No info found.", "debug": chat_debug if request.debug else None}
+        return {
+            "session_id": session_id, 
+            "content": "No info found.", 
+            "debug": chat_debug if request.debug else None
+        }
 
     response = await llm_chat(messages=prompt_messages)
     content = response.message.content
@@ -162,13 +194,14 @@ async def ask_question(
     await save_session_turn(
         session_repo=session_repo,
         workspace_id=db_workspace.id,
-        session_id=request.session_id,
+        session_id=session_id,
         query=request.query,
         response=content,
         debug_docs=chat_debug.documents
     )
-    
+
     return {
+        "session_id": session_id,
         "content": content,
         "debug": chat_debug if request.debug else None
     }
@@ -182,14 +215,23 @@ async def ask_question_stream(
     session_repo: SessionRepositoryDep,
     request: AskRequest
 ):
-    prompt_messages, chat_debug = await prepare_rag_data(
-        request=request, 
+    session_id = await resolve_session_id(
+        session_id=request.session_id, 
         workspace_id=db_workspace.id, 
+        session_repo=session_repo
+    )
+
+    prompt_messages, chat_debug = await prepare_rag_data(
+        request=request,
+        session_id=session_id,
+        workspace_id=db_workspace.id,
         chunk_repo=chunk_repo,
         session_repo=session_repo
     )
 
     async def event_generator():
+        yield f"data: {json.dumps({'session_id': session_id})}\n\n"
+
         if request.debug and chat_debug:
             yield f"data: {json.dumps({'debug': chat_debug.model_dump(mode='json')})}\n\n"
 
@@ -206,7 +248,7 @@ async def ask_question_stream(
         await save_session_turn(
             session_repo=session_repo,
             workspace_id=db_workspace.id,
-            session_id=request.session_id,
+            session_id=session_id,
             query=request.query,
             response=full_content,
             debug_docs=chat_debug.documents

@@ -1,6 +1,7 @@
 import type { ChatDebug, SessionResponse } from './data/schema'
 
 type StreamCallbacks = {
+  onSessionId: (id: string) => void
   onDebug: (debug: ChatDebug) => void
   onChunk: (content: string) => void
   onDone: () => void
@@ -15,7 +16,7 @@ export const chatApi = {
   stream: async (
     query: string,
     tags: string[],
-    sessionId: string,
+    sessionId: string | null,
     apiKey: string,
     callbacks: StreamCallbacks
   ): Promise<void> => {
@@ -63,8 +64,10 @@ export const chatApi = {
           if (!raw) continue
 
           try {
-            const parsed: { content?: string; debug?: ChatDebug } = JSON.parse(raw)
-            if (parsed.debug !== undefined) {
+            const parsed: { session_id?: string; content?: string; debug?: ChatDebug } = JSON.parse(raw)
+            if (parsed.session_id !== undefined) {
+              callbacks.onSessionId(parsed.session_id)
+            } else if (parsed.debug !== undefined) {
               callbacks.onDebug(parsed.debug)
             } else if (parsed.content) {
               callbacks.onChunk(parsed.content)

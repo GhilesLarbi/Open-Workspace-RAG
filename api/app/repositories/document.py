@@ -129,17 +129,16 @@ class DocumentRepository(BaseRepository[Document]):
     #################################################################################
     #################################################################################
     def create(
-        self, 
+        self,
         workspace_id: uuid.UUID,
-        url: str, 
-        lang: LanguageEnum, 
+        url: str,
+        lang: LanguageEnum,
         content_hash: str,
         job_id: Optional[uuid.UUID] = None,
         action: JobDocumentAction = JobDocumentAction.CREATED,
         is_approved: bool = True,
-        title: Optional[str] = None, 
-        tags: Optional[List[str]] = None, 
-        suggestions: Optional[List[str]] = None
+        title: Optional[str] = None,
+        tag: Optional[str] = None,
     ) -> Document:
 
         db_document = self.model(
@@ -149,8 +148,7 @@ class DocumentRepository(BaseRepository[Document]):
             lang=lang,
             content_hash=content_hash,
             is_approved=is_approved,
-            tags=tags or[],
-            suggestions=suggestions or[]
+            tag=tag,
         )
 
         if job_id:
@@ -189,8 +187,7 @@ class DocumentRepository(BaseRepository[Document]):
                 title=title,
                 lang=lang,
                 content_hash=content_hash,
-                tags=[],
-                suggestions=[],
+                tag=None,
                 is_approved=False
             )
             self.db.add(db_document)
@@ -211,14 +208,12 @@ class DocumentRepository(BaseRepository[Document]):
     #################################################################################
     #################################################################################
     async def bulk_label_documents_with_debug(
-        self, 
+        self,
         document_ids: List[uuid.UUID]
     ) -> List[dict]:
-        # Final Tuned Math: 0.09 + 0.02 * ln(L)
-        # This provides a ~0.24 threshold for full chunks, catching all relevant themes.
         query = text("""
             WITH scoring AS (
-                SELECT 
+                SELECT
                     c.document_id,
                     tag.key AS tag_path,
                     (c.embedding <=> tag.val::text::vector) AS distance,
@@ -230,30 +225,29 @@ class DocumentRepository(BaseRepository[Document]):
                 WHERE d.id = ANY(:document_ids)
             ),
             document_best_matches AS (
-                SELECT 
+                SELECT
                     document_id,
                     tag_path,
                     MIN(distance) AS best_distance,
-                    -- We use the max threshold calculated for the doc's chunks
                     MAX(threshold) AS calculated_threshold
                 FROM scoring
                 GROUP BY document_id, tag_path
             ),
-            matches AS (
-                SELECT 
-                    document_id, 
-                    array_agg(DISTINCT tag_path::ltree) AS final_tags_list
+            best_match AS (
+                SELECT DISTINCT ON (document_id)
+                    document_id,
+                    tag_path::ltree AS best_tag
                 FROM document_best_matches
                 WHERE best_distance < calculated_threshold
-                GROUP BY document_id
+                ORDER BY document_id, best_distance ASC
             ),
             update_step AS (
                 UPDATE documents d
-                SET tags = COALESCE(m.final_tags_list, '{}'::ltree[])
-                FROM matches m
+                SET tag = m.best_tag
+                FROM best_match m
                 WHERE d.id = m.document_id
             )
-            SELECT 
+            SELECT
                 dbm.document_id,
                 dbm.tag_path,
                 ROUND(dbm.best_distance::numeric, 4) AS distance,
@@ -269,15 +263,12 @@ class DocumentRepository(BaseRepository[Document]):
     #################################################################################
     async def bulk_remove_tag_hierarchy(self, workspace_id: uuid.UUID, path: str):
         query = text("""
-            UPDATE documents 
-            SET tags = ARRAY(
-                SELECT t FROM unnest(tags) AS t 
-                WHERE NOT (t <@ CAST(:path AS ltree))
-            )
-            WHERE workspace_id = :workspace_id 
-              AND tags ~ CAST(:path || '.*' AS lquery)
+            UPDATE documents
+            SET tag = NULL
+            WHERE workspace_id = :workspace_id
+              AND tag <@ CAST(:path AS ltree)
         """)
-        
+
         await self.db.execute(query, {"path": path, "workspace_id": workspace_id})
 
     #################################################################################
@@ -285,19 +276,14 @@ class DocumentRepository(BaseRepository[Document]):
     async def bulk_rename_tag_hierarchy(self, workspace_id: uuid.UUID, old_path: str, new_path: str):
         query = text("""
             UPDATE documents
-            SET tags = ARRAY(
-                SELECT DISTINCT
-                    CASE 
-                        WHEN t = CAST(:old AS ltree) THEN CAST(:new AS ltree)
-                        WHEN t <@ CAST(:old AS ltree) THEN CAST(:new AS ltree) || subpath(t, nlevel(CAST(:old AS ltree)))
-                        ELSE t 
-                    END
-                FROM unnest(tags) AS t
-            )
-            WHERE workspace_id = :workspace_id 
-              AND tags ~ CAST(:old || '.*' AS lquery)
+            SET tag = CASE
+                WHEN tag = CAST(:old AS ltree) THEN CAST(:new AS ltree)
+                ELSE CAST(:new AS ltree) || subpath(tag, nlevel(CAST(:old AS ltree)))
+            END
+            WHERE workspace_id = :workspace_id
+              AND tag <@ CAST(:old AS ltree)
         """)
-        
+
         await self.db.execute(query, {"old": old_path, "new": new_path, "workspace_id": workspace_id})
 
     #################################################################################

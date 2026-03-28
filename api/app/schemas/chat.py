@@ -35,17 +35,18 @@ class DocumentDebug(BaseModel):
     url: str
     title: Optional[str] = None
     lang: LanguageEnum
-    tags: List[str] = []
-    suggestions: List[str] = []
+    tag: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     chunks: List[ChunkDebug]
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator("tags", mode="before")
+    @field_validator("tag", mode="before")
     @classmethod
     def transform_ltree_to_str(cls, v):
-        return [str(tag) for tag in v] if v else []
+        if v is None:
+            return None
+        return str(v)
 
 class SessionDebug(BaseModel):
     session_id: UUID
@@ -60,13 +61,14 @@ class ChatDebug(BaseModel):
 #############################################################################
 class AskRequest(BaseModel):
     query: str
-    session_id: UUID
+    session_id: Optional[UUID] = None
     tags: List[str] = Field(default_factory=list)
     debug: bool = False
 
 #############################################################################
 #############################################################################
 class ChatResponse(BaseModel):
+    session_id: UUID
     content: str
     debug: Optional[ChatDebug] = None
 

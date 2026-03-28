@@ -63,6 +63,26 @@ class SessionRepository:
 
     ###########################################################################################
     ###########################################################################################
+    async def refresh_ttl(
+        self,
+        workspace_id: uuid.UUID,
+        session_id: str
+    ) -> None:
+        key = self._get_key(workspace_id, session_id)
+        await self.redis.expire(key, self.ttl)
+
+    ###########################################################################################
+    ###########################################################################################
+    async def session_exists(
+        self,
+        workspace_id: uuid.UUID,
+        session_id: str
+    ) -> bool:
+        key = self._get_key(workspace_id, session_id)
+        return await self.redis.exists(key) > 0
+
+    ###########################################################################################
+    ###########################################################################################
     async def clear_session(
         self, 
         workspace_id: uuid.UUID, 

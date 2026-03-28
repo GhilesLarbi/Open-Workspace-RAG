@@ -21,7 +21,7 @@ type Props = {
   isLoadingHistory: boolean
   hasMoreHistory: boolean
   onLoadMore: () => void
-  sessionId: string
+  sessionId: string | null
   apiKey: string
 }
 
@@ -220,6 +220,7 @@ export function ChatMessages({
                                 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
                             )}
                             onClick={() => {
+                              if (!sessionId) return
                               setRatedIdx({ idx: i, value: 'liked' })
                               submitRating({ sessionId, isHelpful: true })
                             }}
@@ -238,6 +239,7 @@ export function ChatMessages({
                                 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                             )}
                             onClick={() => {
+                              if (!sessionId) return
                               setRatedIdx({ idx: i, value: 'disliked' })
                               submitRating({ sessionId, isHelpful: false })
                             }}

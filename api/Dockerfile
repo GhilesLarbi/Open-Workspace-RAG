@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --no-cache-dir pipenv
 COPY Pipfile Pipfile.lock /code/
-RUN pipenv install --system --verbose
+RUN pipenv sync --system --verbose
+# RUN pipenv install --system --verbose
 
 COPY . /code/
 

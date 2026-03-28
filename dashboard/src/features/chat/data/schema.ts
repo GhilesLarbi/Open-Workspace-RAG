@@ -16,8 +16,7 @@ export const chatDebugDocSchema = z.object({
   url: z.string(),
   title: z.string().nullable().optional(),
   lang: z.string(),
-  tags: z.array(z.string()),
-  suggestions: z.array(z.string()),
+  tag: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   chunks: z.array(chunkDebugSchema),
@@ -72,6 +71,7 @@ export type SessionResponse = z.infer<typeof sessionResponseSchema>
 
 // ─── Stream Event ─────────────────────────────────────────────────────────
 export const streamEventSchema = z.object({
+  session_id: z.string().uuid().optional(),
   content: z.string().optional(),
   debug: chatDebugSchema.optional(),
 })

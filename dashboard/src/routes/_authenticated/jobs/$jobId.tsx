@@ -19,7 +19,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { ConfigDrawer } from '@/components/config-drawer'
@@ -324,6 +323,44 @@ function JobDetail() {
   )
 }
 
+function PageItem({
+  url,
+  title,
+  error,
+  reason,
+}: {
+  url: string
+  title?: string | null
+  error?: string | null
+  reason?: string | null
+}) {
+  return (
+    <div className='flex flex-col space-y-1 border-b pb-4 last:border-0'>
+      <a
+        href={url}
+        target='_blank'
+        rel='noopener noreferrer'
+        className='text-sm font-medium hover:underline truncate block'
+      >
+        {title || url}
+      </a>
+      <span className='text-xs text-muted-foreground break-all'>{url}</span>
+      {error && (
+        <div className='rounded-md bg-destructive/10 p-3 mt-1'>
+          <p className='text-xs font-mono text-destructive break-words whitespace-pre-wrap'>
+            {error}
+          </p>
+        </div>
+      )}
+      {reason && (
+        <p className='text-sm text-yellow-600 dark:text-yellow-500 mt-1'>
+          Skipped: {reason}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function PageResultsList({
   pages,
   type,
@@ -339,54 +376,10 @@ function PageResultsList({
     )
   }
 
-  if (type === 'error') {
-    return (
-      <Accordion type='single' collapsible className='w-full'>
-        {pages.map((page, i) => (
-          <AccordionItem key={i} value={`item-${i}`}>
-            <AccordionTrigger className='text-sm hover:no-underline'>
-              <div className='flex flex-col items-start space-y-1 text-left'>
-                <span className='font-medium line-clamp-1'>
-                  {page.title || 'Unknown Title'}
-                </span>
-                <span className='text-xs font-mono text-muted-foreground font-normal'>
-                  {page.url}
-                </span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className='rounded-md bg-destructive/10 p-3 mt-2'>
-                <p className='text-xs font-mono text-destructive break-words whitespace-pre-wrap'>
-                  {page.error || 'Unknown error occurred'}
-                </p>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
-    )
-  }
-
-  // Skipped list stays simple
   return (
     <div className='space-y-4'>
       {pages.map((page, i) => (
-        <div key={i} className='flex flex-col space-y-1 border-b pb-4 last:border-0'>
-          <a
-            href={page.url}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='text-sm font-medium hover:underline line-clamp-1'
-          >
-            {page.title || page.url}
-          </a>
-          <span className='text-xs text-muted-foreground'>{page.url}</span>
-          {page.reason && (
-            <p className='text-sm text-yellow-600 dark:text-yellow-500 mt-1'>
-              Skipped: {page.reason}
-            </p>
-          )}
-        </div>
+        <PageItem key={i} {...page} />
       ))}
     </div>
   )

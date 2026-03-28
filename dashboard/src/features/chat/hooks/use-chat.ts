@@ -5,7 +5,7 @@ import { useSession } from './use-session'
 export type { MessageTiming } from '@/stores/chat-store'
 
 export function useChat(apiKey: string) {
-  const { sessionId, resetSession } = useSession()
+  const { sessionId, receiveSession, refreshSession, resetSession } = useSession()
   const historyFetchedRef = useRef<string | null>(null)
 
   const {
@@ -20,23 +20,29 @@ export function useChat(apiKey: string) {
     clearMessages,
   } = useChatStore()
 
-  // Fetch initial history whenever sessionId changes (new workspace or new session)
+  // Load history when a known session_id is present (e.g. on page load / workspace switch)
   useEffect(() => {
-    if (!apiKey) return
+    if (!apiKey || !sessionId) return
     if (historyFetchedRef.current === sessionId) return
     historyFetchedRef.current = sessionId
 
     useChatStore.getState().clearMessages()
     void useChatStore.getState().loadHistory(sessionId, apiKey, false)
+      .then(() => refreshSession())
   }, [sessionId, apiKey])
 
   const sendMessage = (query: string, tags: string[]) => {
-    void storeSend(query, tags, sessionId, apiKey)
+    void storeSend(query, tags, sessionId, apiKey, (id) => {
+      // Mark this id as already-fetched so the useEffect doesn't load history
+      // for a brand-new session that obviously has no prior turns
+      historyFetchedRef.current = id
+      receiveSession(id)
+    })
   }
 
   const loadMoreHistory = () => {
-    if (!apiKey || isLoadingHistory || !hasMoreHistory) return
-    void loadHistory(sessionId, apiKey, true)
+    if (!apiKey || !sessionId || isLoadingHistory || !hasMoreHistory) return
+    void loadHistory(sessionId, apiKey, true).then(() => refreshSession())
   }
 
   const currentDebug =

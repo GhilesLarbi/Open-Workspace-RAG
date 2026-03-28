@@ -20,8 +20,7 @@ export const documentSchema = z.object({
   url: z.string(),
   title: z.string().nullable().optional(),
   lang: languageEnum,
-  tags: z.array(z.string()),
-  suggestions: z.array(z.string()),
+  tag: z.string().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 })
